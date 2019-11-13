@@ -18,7 +18,7 @@ dfcsv, dffeats = ad.load_dfs(fcsv=fcsv, ffeats=ffeats, cfeat=cfeat, consol=True)
 d = ad.get_hiprob(dfcsv) # class_probability > 0.99
 
 feats = ad.csv_feats_dict
-ft = feats['colors'] + feats['other'][0:2] + feats['mags'][0:3]
+ft = feats['colors'] + feats['other'][0:2] + feats['mags']
 
 d = d.dropna(axis=0, subset=ft) # Use only rows with all features
 d, __ = ad.set_type_info(d) # recalc numinType
@@ -34,8 +34,8 @@ kwargs = {
             'behaviour': 'new',
             # 'max_samples': 1000,
             'random_state': 42,
-            'contamination': 0.01, #'auto',
-            'max_features': 3
+            'contamination': 'auto',
+            'max_features': 1
         }
 forest, predics = uns.do_isoForest(d[ft], kwargs=kwargs)
 # plot
@@ -43,7 +43,8 @@ d['IF_predics'] = predics
 main = d.loc[d.numinType>numHi,:].groupby('IF_predics').size()
 out = d.loc[d.numinType<numLow,:].groupby('IF_predics').size()
 plt.figure()
-plt.bar(main.index, main/main.sum(), alpha=0.5, label="main sample")
-plt.bar(out.index, out/out.sum(), alpha=0.5, label="outlier classes")
-plt.legend()
+plt.bar(main.index, main/main.sum(), alpha=0.5, label=f"Large classes (>{numHi})")
+plt.bar(out.index, out/out.sum(), alpha=0.5, label=f"Small classes (<{numLow})")
+plt.legend(loc='center')
+plt.xticks((-1,1), ('Outlier','Inlier'))
 plt.show(block=False)
