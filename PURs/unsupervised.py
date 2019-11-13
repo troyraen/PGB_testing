@@ -72,7 +72,7 @@ def do_isoForest(df, kwargs=None):
                     # 'max_samples': 1000,
                     'random_state': 42,
                     'contamination': 'auto',
-                    'max_features': 3
+                    'max_features': 1
                 }
 
     forest = IsolationForest(**kwargs).fit(df)
@@ -81,6 +81,25 @@ def do_isoForest(df, kwargs=None):
 
     return forest, predics
 
+
+def plot_isoF_outliers(df, predics, numHi=10000, numLow=50):
+
+    d = df.copy()
+    d['IF_predics'] = predics
+
+    main = d.loc[d.numinType>numHi,:].groupby('IF_predics').size()
+    out = d.loc[d.numinType<numLow,:].groupby('IF_predics').size()
+
+    plt.figure()
+    plt.bar(main.index, main/main.sum(), alpha=0.5, label=f"Large classes (>{numHi})")
+    plt.bar(out.index, out/out.sum(), alpha=0.5, label=f"Small classes (<{numLow})")
+    plt.legend(loc='center')
+    plt.xticks((-1,1), ('Outlier','Inlier'))
+    plt.ylabel('Fraction in Category')
+    plt.title('Isolation Forest')
+    plt.show(block=False)
+
+    return None
 
 
 def plot_confusion_matrix(y_true, y_pred, classes,normalize=False,title=None):
