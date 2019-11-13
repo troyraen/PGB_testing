@@ -28,3 +28,4 @@ d = ad.get_hilow(dfeats, numHi=numHi, numLow=numLow)
 
 # run isolation forest
 forest, predics = uns.do_isolationForest(d[ft])
+print('works')
