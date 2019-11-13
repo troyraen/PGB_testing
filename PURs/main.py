@@ -7,14 +7,14 @@ import asassn_data as ad
 import unsupervised as uns
 
 
-# load data
+#-- Load data --#
 ffeats = Path('/home/tjr63/Documents/PGB/TOM_prop_unsupclust/features.dat')
 fcsv = Path('/home/tjr63/Documents/PGB/TOM_prop_unsupclust/asassn-catalog.csv')
 cfeat = 'W3-W4' # restricts dffeats to rows where this column is not null
 dfcsv, dffeats = ad.load_dfs(fcsv=fcsv, ffeats=ffeats, cfeat=cfeat, consol=True)
 
 
-# restrict dfcsv rows
+#-- Restrict dfcsv rows --#
 d = ad.get_hiprob(dfcsv) # class_probability > 0.99
 
 feats = ad.csv_feats_dict
@@ -28,5 +28,22 @@ numLow = 50
 d = ad.get_hilow(d, numHi=numHi, numLow=numLow)
 
 
-# run isolation forest
-forest, predics = uns.do_isoForest(d[ft])
+#-- Run isolation forest --#
+kwargs = {
+            # 'n_estimators': 1000,
+            'behaviour': 'new',
+            # 'max_samples': 1000,
+            'random_state': 42,
+            'contamination': 0.01, #'auto',
+            'max_features': 3
+        }
+forest, predics = uns.do_isoForest(d[ft], kwargs=kwargs)
+# plot
+d['IF_predics'] = predics
+main = d.loc[d.numinType>numHi,:].groupby('IF_predics').size()
+out = d.loc[d.numinType<numLow,:].groupby('IF_predics').size()
+plt.figure()
+plt.bar(main.index, main/main.sum(), alpha=0.5, label="main sample")
+plt.bar(out.index, out/out.sum(), alpha=0.5, label="outlier classes")
+plt.legend()
+plt.show(block=False)
