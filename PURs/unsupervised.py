@@ -38,16 +38,16 @@ def do_kmeans(df, nclusts=None, normfeats=True):
 
     return kmns, clusts, dists
 
-def plot_kmeans_dist(df, clusts, dists, numHi=10000, numLow=50):
+def plot_kmeans_dist(df, clusts, dists, nLarge=10000, nSmall=50):
     d = df.copy()
     d['minDist'] = np.amin(dists, axis=1)
 
-    large = d.loc[d.numinType>numHi,'minDist']
-    small = d.loc[d.numinType<numLow,'minDist']
+    large = d.loc[d.numinType>nLarge,'minDist']
+    small = d.loc[d.numinType<nSmall,'minDist']
 
     plt.figure()
-    plt.hist(large, alpha=0.5, density=True, label=f"Large classes (>{numHi})")
-    plt.hist(small, alpha=0.5, density=True, label=f"Small classes (<{numLow})")
+    plt.hist(large, alpha=0.5, density=True, label=f"Large classes (>{nLarge})")
+    plt.hist(small, alpha=0.5, density=True, label=f"Small classes (<{nSmall})")
     plt.legend(loc=1)
     plt.xlabel('Distance from cluster center')
     plt.title('K-means')
@@ -78,17 +78,17 @@ def do_isoForest(df, kwargs=None):
     return forest, predics
 
 
-def plot_isoF_outliers(df, predics, numHi=10000, numLow=50):
+def plot_isoF_outliers(df, predics, nLarge=10000, nSmall=50):
 
     d = df.copy()
     d['IF_predics'] = predics
 
-    large = d.loc[d.numinType>numHi,:].groupby('IF_predics').size()
-    small = d.loc[d.numinType<numLow,:].groupby('IF_predics').size()
+    large = d.loc[d.numinType>nLarge,:].groupby('IF_predics').size()
+    small = d.loc[d.numinType<nSmall,:].groupby('IF_predics').size()
 
     plt.figure()
-    plt.bar(large.index, large/large.sum(), alpha=0.5, label=f"Large classes (>{numHi})")
-    plt.bar(small.index, small/small.sum(), alpha=0.5, label=f"Small classes (<{numLow})")
+    plt.bar(large.index, large/large.sum(), alpha=0.5, label=f"Large classes (>{nLarge})")
+    plt.bar(small.index, small/small.sum(), alpha=0.5, label=f"Small classes (<{nSmall})")
     plt.legend(loc='center')
     plt.xticks((-1,1), ('Outlier','Inlier'))
     plt.ylabel('Fraction in Category')

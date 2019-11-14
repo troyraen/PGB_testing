@@ -91,11 +91,33 @@ def get_hiprob(df, cprob=0.99):
     return d
 
 
-def get_hilow(df, numHi=10000, numLow=50):
+def get_large_small(df, nLarge=10000, nSmall=50):
     """ Returns df of classes with large and small number of examples.
     """
 
-    d = df.loc[((df.numinType>numHi) | (df.numinType<numLow))]
+    d = df.loc[((df.numinType>nLarge) | (df.numinType<nSmall))]
+
+    return d
+
+
+def filter_dfcsv(dfcsv, feats=None, nLarge=10000, nSmall=50):
+
+    if feats is None:
+        feats = csv_feats_dict['colors'] +
+                csv_feats_dict['other'][0:2] +
+                csv_feats_dict['mags']
+
+    # class_probability > 0.99
+    d = get_hiprob(dfcsv)
+
+    # keep only rows with all features
+    d = d.dropna(axis=0, subset=feats)
+
+    # recalc numinType
+    d, __ = ad.set_type_info(d)
+
+    # keep only large and small classes
+    d = ad.get_large_small(d, nLarge=nLarge, nSmall=nSmall)
 
     return d
 

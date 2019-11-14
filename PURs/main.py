@@ -14,25 +14,23 @@ cfeat = 'W3-W4' # restricts dffeats to rows where this column is not null
 dfcsv, dffeats = ad.load_dfs(fcsv=fcsv, ffeats=ffeats, cfeat=cfeat, consol=True)
 
 
-#-- Restrict dfcsv rows --#
-d = ad.get_hiprob(dfcsv) # class_probability > 0.99
-
+#-- Use for filtering dfcsv rows --#
 feats = ad.csv_feats_dict
-ft = feats['colors'] + feats['other'][0:2] + feats['mags']
-
-d = d.dropna(axis=0, subset=ft) # Use only rows with all features
-d, __ = ad.set_type_info(d) # recalc numinType
-
-numHi = 10000
-numLow = 50
-d = ad.get_hilow(d, numHi=numHi, numLow=numLow)
+nLarge, nSmall = 10000, 50
 
 
 #-- Run isolation forest --#
+ft = feats['colors'] + feats['other'][0:2] + feats['mags'] # features to use
+d = ad.filter_dfcsv(dfcsv, feats=ft, nLarge=nLarge, nSmall=nSmall) # filter dfcsv
+
 forest, predics = uns.do_isoForest(d[ft], kwargs=kwargs)
-uns.plot_isoF_outliers(d, predics, numHi=numHi, numLow=numLow) # plot
+uns.plot_isoF_outliers(d, predics, nLarge=nLarge, nSmall=nSmall)
+
 
 #-- Run kmeans --#
-nclusts = len(d.loc[d.numinType>numHi,'newType'].unique())
+ft = feats['colors'] + feats['other'][:-1] + feats['mags']
+d = ad.filter_dfcsv(dfcsv, feats=ft, nLarge=nLarge, nSmall=nSmall)
+nclusts = len(d.loc[d.numinType>nLarge,'newType'].unique())
+
 kmns, clusts, dists = do_kmeans(d[ft], nclusts=nclusts, normfeats=True)
-uns.plot_kmeans_dist(d, clusts, dists, numHi=numHi, numLow=numLow) # plot
+uns.plot_kmeans_dist(d, clusts, dists, nLarge=nLarge, nSmall=nSmall)
