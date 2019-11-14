@@ -46,10 +46,11 @@ def plot_kmeans_dist(df, clusts, dists, nLarge=10000, nSmall=50):
     small = d.loc[d.numinType<nSmall,'minDist']
 
     plt.figure()
-    plt.hist(large, alpha=0.5, density=True, label=f"Large classes (>{nLarge})")
-    plt.hist(small, alpha=0.5, density=True, label=f"Small classes (<{nSmall})")
+    kwargs = {'alpha':0.5, 'density':True, 'bins':20}
+    plt.hist(large, label=f"Large classes (>{nLarge})", **kwargs)
+    plt.hist(small, label=f"Small classes (<{nSmall})", **kwargs)
     plt.legend(loc=1)
-    plt.xlabel('Distance from cluster center')
+    plt.xlabel('Distance from center of assigned cluster')
     plt.title('K-means')
     plt.show(block=False)
 
