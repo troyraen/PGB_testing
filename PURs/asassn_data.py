@@ -103,8 +103,8 @@ def get_large_small(df, nLarge=10000, nSmall=50):
 def filter_dfcsv(dfcsv, feats=None, nLarge=10000, nSmall=50):
 
     if feats is None:
-        feats = csv_feats_dict['colors'] +
-                csv_feats_dict['other'][0:2] +
+        feats = csv_feats_dict['colors'] + \
+                csv_feats_dict['other'][0:2] + \
                 csv_feats_dict['mags']
 
     # class_probability > 0.99
@@ -114,10 +114,10 @@ def filter_dfcsv(dfcsv, feats=None, nLarge=10000, nSmall=50):
     d = d.dropna(axis=0, subset=feats)
 
     # recalc numinType
-    d, __ = ad.set_type_info(d)
+    d, __ = set_type_info(d)
 
     # keep only large and small classes
-    d = ad.get_large_small(d, nLarge=nLarge, nSmall=nSmall)
+    d = get_large_small(d, nLarge=nLarge, nSmall=nSmall)
 
     return d
 
