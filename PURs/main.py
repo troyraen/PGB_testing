@@ -28,9 +28,9 @@ uns.plot_isoF_outliers(d, predics, nLarge=nLarge, nSmall=nSmall)
 
 
 #-- Run kmeans --#
+nclusts = len(d.loc[d.numinType>nLarge,'newType'].unique())
 ft = feats['colors'] + feats['other'][:-1] + feats['mags']
 d = ad.filter_dfcsv(dfcsv, feats=ft, nLarge=nLarge, nSmall=nSmall)
-nclusts = len(d.loc[d.numinType>nLarge,'newType'].unique())
 
-kmns, clusts, dists = do_kmeans(d[ft], nclusts=nclusts, normfeats=True)
+kmns, clusts, dists = uns.do_kmeans(d[ft], nclusts=nclusts, normfeats=True)
 uns.plot_kmeans_dist(d, clusts, dists, nLarge=nLarge, nSmall=nSmall)
