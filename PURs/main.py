@@ -29,22 +29,10 @@ d = ad.get_hilow(d, numHi=numHi, numLow=numLow)
 
 
 #-- Run isolation forest --#
-kwargs = {
-            # 'n_estimators': 1000,
-            'behaviour': 'new',
-            # 'max_samples': 1000,
-            'random_state': 42,
-            'contamination': 'auto',
-            'max_features': 1
-        }
 forest, predics = uns.do_isoForest(d[ft], kwargs=kwargs)
-# plot
-d['IF_predics'] = predics
-main = d.loc[d.numinType>numHi,:].groupby('IF_predics').size()
-out = d.loc[d.numinType<numLow,:].groupby('IF_predics').size()
-plt.figure()
-plt.bar(main.index, main/main.sum(), alpha=0.5, label=f"Large classes (>{numHi})")
-plt.bar(out.index, out/out.sum(), alpha=0.5, label=f"Small classes (<{numLow})")
-plt.legend(loc='center')
-plt.xticks((-1,1), ('Outlier','Inlier'))
-plt.show(block=False)
+uns.plot_isoF_outliers(d, predics, numHi=numHi, numLow=numLow) # plot
+
+#-- Run kmeans --#
+nclusts = len(d.loc[d.numinType>numHi,'newType'].unique())
+kmns, clusts, dists = do_kmeans(d[ft], nclusts=nclusts, normfeats=True)
+uns.plot_kmeans_dist(d, clusts, dists, numHi=numHi, numLow=numLow) # plot

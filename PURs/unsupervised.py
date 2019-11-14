@@ -19,46 +19,42 @@ def norm_features(df, algor='minmax'):
         # need to finish this...
 
 
-def do_kmeans(df, dftest=None, nclusts=None, normfeats=True, color=None):
-    """ Runs Kmeans clustering using training set df.
-        Returns various dataframes of predictions on df and dftest using both all features
-          and a subset of the top features as indicated by feature importance from the
-          random forest classification run by Upsilon
-          (paper: https://www.aanda.org/articles/aa/pdf/2016/03/aa27188-15.pdf)
-          CURRENTLY returns only kmeans on top features
+def do_kmeans(df, nclusts=None, normfeats=True):
+    """ Runs Kmeans clustering on df.
 
-        color should be None or one of the colors from csv_colors (as a string)
     """
-    d = df.copy()
-    if dftest is not None:
-        dt = dftest.copy()
-    if nclusts is None:
-        nclusts = len(d.intType.unique())
-    # kwargs = {'init':'random'}
-    kwargs = {}
 
-    if normfeats:
-        d = norm_features(d)
-        if dftest is not None:
-            dt = norm_features(dt)
+    d = norm_features(df) if normfeats else df.copy()
 
     # find the clusters
-    kmns = KMeans(n_clusters=nclusts, random_state=0, **kwargs).fit(d)
+    kwargs = {
+                # 'init':'random'
+            }
+    kmns = KMeans(n_clusters=nclusts, random_state=13, **kwargs).fit(d)
 
-    # get predictions
-    predics = kmns.predict(d)
-    if dftest is not None:
-        predics_test = kmns.predict(dt)
+    # get results
+    clusts = kmns.predict(d) # cluster assignments
+    dists = kmns.transform(d) # distances from cluster means
 
-    # get distances from cluster means
-    dists = kmns.transform(d)
-    if dftest is not None:
-        dists_test = kmns.transform(dt)
+    return kmns, clusts, dists
 
-    if dftest is not None:
-        return predics, predics_test, dists, dists_test
-    else:
-        return predics, dists
+def plot_kmeans_dist(df, clusts, dists, numHi=10000, numLow=50):
+    d = df.copy()
+    d['minDist'] = np.amin(dists, axis=1)
+
+    large = d.loc[d.numinType>numHi,'minDist']
+    small = d.loc[d.numinType<numLow,'minDist']
+
+    plt.figure()
+    plt.hist(large, alpha=0.5, density=True, label=f"Large classes (>{numHi})")
+    plt.hist(small, alpha=0.5, density=True, label=f"Small classes (<{numLow})")
+    plt.legend(loc=1)
+    plt.xlabel('Distance from cluster center')
+    plt.title('K-means')
+    plt.show(block=False)
+
+    return None
+
 
 
 def do_isoForest(df, kwargs=None):
@@ -87,12 +83,12 @@ def plot_isoF_outliers(df, predics, numHi=10000, numLow=50):
     d = df.copy()
     d['IF_predics'] = predics
 
-    main = d.loc[d.numinType>numHi,:].groupby('IF_predics').size()
-    out = d.loc[d.numinType<numLow,:].groupby('IF_predics').size()
+    large = d.loc[d.numinType>numHi,:].groupby('IF_predics').size()
+    small = d.loc[d.numinType<numLow,:].groupby('IF_predics').size()
 
     plt.figure()
-    plt.bar(main.index, main/main.sum(), alpha=0.5, label=f"Large classes (>{numHi})")
-    plt.bar(out.index, out/out.sum(), alpha=0.5, label=f"Small classes (<{numLow})")
+    plt.bar(large.index, large/large.sum(), alpha=0.5, label=f"Large classes (>{numHi})")
+    plt.bar(small.index, small/small.sum(), alpha=0.5, label=f"Small classes (<{numLow})")
     plt.legend(loc='center')
     plt.xticks((-1,1), ('Outlier','Inlier'))
     plt.ylabel('Fraction in Category')
