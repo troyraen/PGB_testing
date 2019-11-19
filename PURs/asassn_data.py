@@ -100,15 +100,15 @@ def get_large_small(df, nLarge=10000, nSmall=50):
     return d
 
 
-def filter_dfcsv(dfcsv, feats=None, nLarge=10000, nSmall=50):
+def filter_dfcsv(dfcsv, feats=None, nLarge=10000, nSmall=50, cprob=0.99):
 
     if feats is None:
         feats = csv_feats_dict['colors'] + \
                 csv_feats_dict['other'][0:2] + \
                 csv_feats_dict['mags']
 
-    # class_probability > 0.99
-    d = get_hiprob(dfcsv)
+    # class_probability > cprob
+    d = get_hiprob(dfcsv, cprob=cprob)
 
     # keep only rows with all features
     d = d.dropna(axis=0, subset=feats)
