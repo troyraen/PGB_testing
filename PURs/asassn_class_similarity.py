@@ -41,4 +41,3 @@ for sc in sclasses:
 
         simdf.loc[(sc,lc),'dist'] = np.sqrt(dist)
         simdf.loc[(sc,lc),'dist_std'] = np.sqrt(dist_std)
-        # print(sc, lc, dist)

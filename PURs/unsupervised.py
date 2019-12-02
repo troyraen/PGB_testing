@@ -14,8 +14,9 @@ from sklearn.utils.multiclass import unique_labels
 
 def norm_features(df, algor='minmax'):
     if algor == 'minmax':
-        return (df-df.min())/(df.max()-df.min())
-    # elif algor == 'standardize':
+        return (df-df.min(axis=0))/(df.max(axis=0)-df.min(axis=0))
+    elif algor == 'standardize':
+        return (df-df.mean(axis=0))/df.std(axis=0)
         # need to finish this...
 
 
