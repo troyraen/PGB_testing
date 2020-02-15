@@ -16,8 +16,11 @@
         - Both are used as classifier algorithms.
     Differences
         - In Bayesian networks the visual representation of graph that is vertices and edges have meaning- The network structure itself gives you valuable information about conditional dependence between the variables. With Neural Networks the network structure does not tell you anything.
-        - Bayesian networks represent independence (and dependence) relationships between variables. Thus, the links represent conditional relationships in the probabilistic sense. Neural networks, generally speaking, have no such direct interpretation, and in fact the intermediate nodes of most neural networks are discovered features, instead of having any predicate associated with them in their own right.
+        - Bayesian networks represent independence (and dependence) relationships between variables. Thus, the _links represent conditional relationships in the probabilistic sense_. Neural networks, generally speaking, have no such direct interpretation, and in fact the intermediate nodes of most neural networks are discovered features, instead of having any predicate associated with them in their own right.
         - Bayesian networks are generally simpler in comparison to Neural networks, with many decisions about hidden layers, and topology and variants.
+
+[Bayesian Networks](https://ftp.cs.ucla.edu/pub/stat_ser/r277.pdf)
+    - Perhaps the most important aspect of a Bayesian networks is that they are _direct representations of the world, not of reasoning processes. The arrows in the diagram represent real causal connections and not the flow of information during reasoning (as in rule-based systems and neural networks). Reasoning processes can operate on Bayesian networks by propagating information in any direction._
 
 [BBN slide deck](https://www.saedsayad.com/docs/Bayesian_Belief_Network.pdf)
 
