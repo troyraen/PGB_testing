@@ -3,6 +3,16 @@ https://web.archive.org/web/20080226032415/http://home.mindspring.com/~mikesimon
 http://www.mssl.ucl.ac.uk/www_astro/gal/cv_beginners.html
 https://heasarc.gsfc.nasa.gov/docs/objects/cvs/cvstext.html
 
+# Astronomers Telegram
+Looking for novae/CVs confused with other things.
+
+```python
+%run CVfncs
+get_cvs_from_at()
+```
+
+__I got myself blocked, probably for suspected DNS.___
+
 
 # ASAS-SN:
 <!-- fs asassn -->
