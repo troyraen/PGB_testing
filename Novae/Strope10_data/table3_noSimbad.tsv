@@ -1,0 +1,42 @@
+#
+#   VizieR Astronomical Server vizier.u-strasbg.fr
+#    Date: 2020-02-27T16:46:30 [V1.99+ (14-Oct-2013)]
+#   In case of problem, please report to:	cds-question@unistra.fr
+#
+#
+#Coosys	J2000:	eq_FK5 J2000
+#INFO	votable-version=1.99+ (14-Oct-2013)	
+#INFO	-ref=VIZ5e57f093545a	
+#INFO	-out.max=unlimited	
+#INFO	queryParameters=9	
+#-oc.form=dec
+#-out.max=unlimited
+#-order=I
+#-out.src=J/AJ/140/34/table3
+#-nav=cat:J/AJ/140/34&tab:{J/AJ/140/34/table3}&key:source=J/AJ/140/34/table1&HTTPPRM:&&-ref=VIZ5e57f093545a&-out.max=50&-out.form=HTML Table&-oc.form=sexa&-order=I&-out=Class&-out=Def&-out=Ex&-ignore=Simbad=*&Simbad=Simbad&-file=.&-meta.ucd=2&-meta=1&-meta.foot=1&-usenav=1&-bmark=POST&-out.src=J/AJ/140/34/table3
+#-source=J/AJ/140/34/table3
+#-out=Class
+#-out=Def
+#-out=Ex
+#
+
+#RESOURCE=yCat_51400034
+#Name: J/AJ/140/34
+#Title: Classification of nova light curves (Strope+, 2010)
+#Table	J_AJ_140_34_table3:
+#Name: J/AJ/140/34/table3
+#Title: Definitions and examples of light curve classes
+#Column	Class	(A1)	[SPDCOFJ] Class code	[ucd=meta.code.class]
+#Column	Def	(a102)	Definition	[ucd=meta.note]
+#Column	Ex	(a31)	Examples	[ucd=meta.note]
+Class|Def|Ex
+ | |
+-|------------------------------------------------------------------------------------------------------|-------------------------------
+S|Smooth; power-law decline with no major fluctuations                                                  |CP Lac, V1668 Cyg, V2275 Cyg
+P|Plateau; smooth decline interrupted by a long-lasting nearly flat interval followed by steeper decline|V4633 Sgr, CP Pup, RS Oph
+D|Dust dip; decline interrupted by fast decline, minimum, and recovery to just below original decline   |DQ Her, FH Ser, V705 Cas
+C|Cusp; power-law decline plus secondary maximum with steepening rise then steep decline                |V2362 Cyg, V1493 Aql, V2491 Cyg
+O|Oscillations; smooth decline with interval showing quasi-sinusoidal variations                        |V603 Aql, GK Per, V1494 Aql
+F|Flat topped; smooth light curve with an extended interval at the peak with near constant brightness   |DO Aql, V849 Oph, BT Mon
+J|Jitter; decline displays substantial variability often as short-duration brightenings                 |DK Lac, HR Del, V723 Cas
+
