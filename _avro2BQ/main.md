@@ -1,7 +1,7 @@
 # Set up Google Cloud Function to grab Avro files from GCS bucket and import to BigQuery
 
 ## Starting with a pre-written function
-
+<!-- fs -->
 [AVRO/CSV Import to BigQuery from Cloud Storage with a Cloud Function](https://cloud.google.com/community/tutorials/cloud-functions-avro-import-bq)
 
 > This tutorial demonstrates using a Cloud Function to create a serverless cron scheduled import for data management or data science workflows. One such use case would be when a third party provides data uploaded to a Cloud Storage bucket on a regular basis in a GCP project. Instead of manually importing the CSV or AVRO to BigQuery each day, you can use a cloud function with a trigger on object.finalize on a set bucket. This way, whenever a CSV or an AVRO file is uploaded to that bucket, the function imports the file to a new BigQuery table to the specified dataset.
@@ -31,9 +31,10 @@ Upload an AVRO file to the source Cloud Storage bucket specified in `install.sh`
 __Gives errors.__ First is `TypeError: Cannot read property 'bucket' of undefined at exports.ToBigQuery_Stage (index.js:14)`. Based on the [solution to this error](https://medium.com/p/db357cc799ca/responses/show), I tried changing `event.data` to `event` in index.js. This gave two other errors: `TypeError: callback is not a function` and `ERROR: { ApiError: Error while reading data, error message: The Apache Avro library failed to parse the header with the following error: Unexpected type for default value. Expected double, but found null: null`
 
 Now trying to write my own function.
+<!-- fe ## Starting with a pre-written function -->
 
 ## Writing my own cloud function
-
+<!-- fs -->
 Based on the previous pre-written function and the instructions at [Loading Avro data from Cloud Storage](https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-avro)
 
 From [Cloud Function](https://console.cloud.google.com/functions/list?project=ardent-cycling-243415), `CREATE FUNCTION`.
@@ -177,3 +178,54 @@ print("Job finished.")
 destination_table = client.get_table(dataset_ref.table("us_states"))
 print("Loaded {} rows.".format(destination_table.num_rows))
 ``` -->
+<!-- fe ## Writing my own cloud function -->
+
+## Trying to create a BQ table via direct upload of an Avro file
+<!-- fs -->
+Getting the following error:
+`Error while reading data, error message: The Apache Avro library failed to parse the header with the following error: Unexpected type for default value. Expected double, but found null: null`
+
+Tried reading one of the Avro files using `fastavro` and everything _seemed_ fine.
+
+Now trying to download newer alerts than the ones I already had on Roy. Downloading from [https://ztf.uw.edu/alerts/public/](https://ztf.uw.edu/alerts/public/).
+
+Getting the same error when using a new alert to manually create a BQ table.
+
+```python
+import fastavro as fa
+afile = '/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data/ztf_archive/1154446891615015011.avro' # new ZTF Avro alert
+
+# schema defined here: https://zwickytransientfacility.github.io/ztf-avro-alert/schema.html
+# dict taken from https://github.com/ZwickyTransientFacility/ztf-avro-alert/blob/master/schema/alert.avsc
+# Note that I had to change `"default": null` to `"default": "null"` in several places.
+schema = {
+	"namespace": "ztf",
+	"type": "record",
+	"name": "alert",
+	"doc": "avro alert schema for ZTF (www.ztf.caltech.edu)",
+	"version": "3.3",
+	"fields": [
+                {"name": "schemavsn", "type": "string", "doc": "schema version used"},
+                {"name": "publisher", "type": "string", "doc": "origin of alert packet"},
+		{"name": "objectId", "type": "string", "doc": "object identifier or name"},
+		{"name": "candid", "type": "long"},
+		{"name": "candidate", "type": "ztf.alert.candidate"},
+		{"name": "prv_candidates", "type": [{
+				"type": "array",
+				"items": "ztf.alert.prv_candidate"}, "null" ], "default": "null"},
+		{"name": "cutoutScience", "type": ["ztf.alert.cutout", "null"], "default": "null"},
+		{"name": "cutoutTemplate", "type": ["ztf.alert.cutout", "null"], "default": "null"},
+		{"name": "cutoutDifference", "type": ["ztf.alert.cutout", "null"], "default": "null"}
+			]
+}
+
+with open(afile, 'rb') as fo:
+    avro_reader = fa.reader(fo)
+    for record in avro_reader:
+        fa.validate(record,schema)
+# This returns `True`, so the data is valid when I supply the schema manually.
+```
+
+__I think the problem is in the `"default": null` encoding, where `null` is not quoted and I think it should be.__
+
+<!-- fe ## Trying to create a BQ table via direct upload of an Avro file -->
