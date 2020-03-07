@@ -4,7 +4,9 @@
 
 ## Testing `consumer.py`
 
-Usage example copied from the file:
+### Usage example copied from the file:
+__Skip to next sections for the complete code to test this__
+<!-- fs -->
 
 ```python
 from broker.consumer import GCSKafkaConsumer, DEFAULT_ZTF_CONFIG
@@ -28,9 +30,10 @@ c = GCSKafkaConsumer(
 c.run()
 
 ```
+<!-- fe ### Usage example copied from the file: -->
 
-My attempt:
-
+### Setup:
+<!-- fs -->
 ```bash
 cd /Users/troyraen/Documents/PGB/repo
 pgbenv
@@ -44,6 +47,10 @@ ipython
 - [x]  Getting authentication info from the notebook [ztf-auth-test.ipynb](notebooks/ztf-auth-test.ipynb).
     - [x]  Need files `pitt-reader.user.keytab` and `krb5.conf` in the current directory.
 
+<!-- fe ### Setup: -->
+
+### Code to test `consumer.py`
+<!-- fs -->
 ```python
 import os
 os.environ['KRB5_CONFIG'] = './krb5.conf'
@@ -66,7 +73,7 @@ c = GCSKafkaConsumer(
 )
 
 ###
-# Got the following errors until I set the os `KRB5_CONFIG` variable, created the bucket, and gave permissions to pbserviceaccount@pitt-broker.iam.gserviceaccount.com
+# Got the following errors until I set the os `KRB5_CONFIG` variable, put the authentication files in main broker repo dir, created the bucket, and gave permissions to pbserviceaccount@pitt-broker.iam.gserviceaccount.com
 
 # kinit: Cannot find KDC for realm "KAFKA.SECURE" while getting initial credentials
 # Forbidden: 403 GET https://www.googleapis.com/storage/v1/b/my-gcs-bucket-name-troys-test?projection=noAcl: pbserviceaccount@pitt-broker.iam.gserviceaccount.com does not have storage.buckets.get access to my-gcs-bucket-name-troys-test.
@@ -76,4 +83,7 @@ c = GCSKafkaConsumer(
 c.run()
 ```
 
-I can get it to `c.run()`, but it doesn't look like it's actually putting files into the bucket.
+__I can get it to `c.run()`, but it doesn't look like it's actually putting files into the bucket.__
+
+
+<!-- fe ### Code to test `consumer.py` -->
