@@ -1,6 +1,6 @@
 # Testing Daniel's SNData package
 
-[Read the docs](https://sn-data.readthedocs.io/en/1.0.0/index.html)
+[Read the docs](https://sn-data.readthedocs.io/en/latest/)
 
 [Repo](http://github.com/djperrefort/SNData)
 
@@ -31,15 +31,16 @@ dr3_demo_table
 
 # get observational data
 object_ids = dr3.get_available_ids() # get object ids in DR
-print(obj_ids)
+print(object_ids)
 demo_id = object_ids[0]
 data_table = dr3.get_data_for_id(demo_id) # Get data for a given object
 print(data_table)
 print(data_table.meta)
 
 # Fit the data
+import sncosmo
 model = sncosmo.Model('salt2')
-model.set(z=data_table.meta['redshift'])
+model.set(z=data_table.meta['z'])
 result, fitted_model = sncosmo.fit_lc(
     data=data_table,
     model=model,
@@ -48,7 +49,7 @@ print(result)
 
 # use a filter to get only some of the available objects
 def filter_func(data_table):
-    return data_table.meta['redshift'] < .1
+    return data_table.meta['z'] < .1
 for data in dr3.iter_data(filter_func=filter_func):
     print(data)
     break
@@ -73,4 +74,5 @@ print(combined_data.get_joined_ids()) # get a list of joined ID values
 combined_data.separate_ids(obj_id_1, obj_id_2, obj_id_3, ...) # undo the joining
 
 dr3.delete_module_data() # delete the data
+combined_data.delete_module_data()
 ```
