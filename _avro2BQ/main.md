@@ -229,3 +229,47 @@ with open(afile, 'rb') as fo:
 __I think the problem is in the `"default": null` encoding, where `null` is not quoted and I think it should be.__
 
 <!-- fe ## Trying to create a BQ table via direct upload of an Avro file -->
+
+# USE LSST functions to correct the schema (Fix schema header idiosyncrasies)
+
+This is giving errors related to redefined schema, [see here](https://github.com/lsst-dm/alert_stream/issues/24)
+
+To use this, would still need to fix the ordering of the type lists in the schema files.
+
+```python
+from os.path import join as pjoin
+import fastavro
+from _avro2BQ import LSST_Avro_utils as lau
+
+# build schema
+rootdir = '/Users/troyraen/Documents/PGB/PGB_testing/_avro2BQ/schemas'
+slst = ['alert','candidate','cutout','prv_candidate']
+slst.reverse() # necessary to avoid error
+schema_list = []
+for s in slst:
+    filename = pjoin(rootdir,f'{s}.avsc')
+    schema_list.append(lau.load_schema(filename))
+# full_schema = resolve_schema(schema_list, root_name='ztf.alert')
+full_schema = lau.resolve_schema_definition(schema_list, seen_names=None)
+
+# get data
+path = '/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data/ztf_archive/1154446891615015011.avro'
+with open(path, 'rb') as f:
+    for r in fastavro.reader(f):
+        data = r
+        break
+
+# write file
+lau.write_avro_data(data, full_schema)
+## this give the error:
+    # SchemaParseException: redefined named type: ztf.alert.candidate
+newpath = '/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data/ztf_archive/1154446891615015011_new.avro'
+fastavro.schemaless_writer(newpath, full_schema, data)
+## this gives the same error as above
+```
+according to this page
+https://github.com/lsst-dm/alert_stream/issues/24
+newest version(s) of fastavro don't work with nested schemas when a schema is repeated
+(as is the case here)
+
+
