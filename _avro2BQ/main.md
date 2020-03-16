@@ -1,6 +1,6 @@
 # Set up Google Cloud Function to grab Avro files from GCS bucket and import to BigQuery
 
-## Starting with a pre-written function
+## Starting with a pre-written (Java) function
 <!-- fs -->
 [AVRO/CSV Import to BigQuery from Cloud Storage with a Cloud Function](https://cloud.google.com/community/tutorials/cloud-functions-avro-import-bq)
 
@@ -33,7 +33,7 @@ __Gives errors.__ First is `TypeError: Cannot read property 'bucket' of undefine
 Now trying to write my own function.
 <!-- fe ## Starting with a pre-written function -->
 
-## Writing my own cloud function
+## Writing my own cloud function (Python)
 <!-- fs -->
 Based on the previous pre-written function and the instructions at [Loading Avro data from Cloud Storage](https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-avro)
 
@@ -58,7 +58,7 @@ def streaming(data, context):
     bucket_name = data['bucket']
     file_name = data['name']
 
-# from https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-avro
+    # from https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-avro
     table_ref = BQ.dataset(BQ_DATASET).table(BQ_TABLE)
     job_config = bigquery.LoadJobConfig()
     job_config.write_disposition = bigquery.WriteDisposition.WRITE_APPEND
@@ -226,9 +226,78 @@ with open(afile, 'rb') as fo:
 # This returns `True`, so the data is valid when I supply the schema manually.
 ```
 
-__I think the problem is in the `"default": null` encoding, where `null` is not quoted and I think it should be.__
+~__I think the problem is in the `"default": null` encoding, where `null` is not quoted and I think it should be.__~
+__See email from Eric Bellm. Problem seems to be that the default value (which should be null) needs to come first in the definition.__
 
 <!-- fe ## Trying to create a BQ table via direct upload of an Avro file -->
+
+
+# Fix schema header idiosyncrasies
+<!-- fs -->
+This fix is going in the `alert_ingestion.format_alerts` module.
+
+THIS WORKS AND BQ CAN AUTOMATICALLY CREATE A TABLE FROM IT
+
+```python
+# in repo/broker dir:
+import fastavro
+
+# get data and schema from file
+def load_data():
+    path = '/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data/ztf_archive/1154446891615015011.avro'
+    with open(path, 'rb') as f:
+        avro_reader = fastavro.reader(f)
+        schema = avro_reader.writer_schema
+        for r in avro_reader:
+            data = r
+            break
+    return schema, data
+# correct the schema
+def reverse_types_if_default_is_null(field):
+    if isinstance(field['type'],list):
+
+        try:
+            if field['default'] is None:
+                new_types = field['type'][::-1]
+            else: # default is something other than null
+                new_types = field['type']
+        except KeyError: # if default doesn't exist, reverse the list
+            new_types = field['type'][::-1]
+
+        field['type'] = new_types
+
+    return field
+
+schema, data = load_data()
+for l1, level1_field in enumerate(schema['fields']):
+    # level1_field is a dict
+
+    schema['fields'][l1] = reverse_types_if_default_is_null(level1_field)
+
+    # if isinstance(level1_field['type'],dict):
+    if level1_field['name'] == 'candidate':
+        for l2, level2_field in enumerate(level1_field['type']['fields']):
+            schema['fields'][l1]['type']['fields'][l2] = reverse_types_if_default_is_null(level2_field)
+
+    if level1_field['name'] == 'prv_candidates':
+        print('prv')
+        # print(level1_field['type'])
+        for l2, level2_field in enumerate(level1_field['type'][1]['items']['fields']):
+            # print(level2_field.keys())
+            # print(level2_field['type'])
+            schema['fields'][l1]['type'][1]['items']['fields'][l2] = reverse_types_if_default_is_null(level2_field)
+
+# write the new file
+newpath = '/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data/ztf_archive/1154446891615015011_new.avro'
+with open(newpath, 'wb') as out:
+    fastavro.writer(out, schema, [data])
+
+# THIS WORKS AND BQ CAN AUTOMATICALLY CREATE A TABLE FROM IT
+
+
+```
+
+
 
 # USE LSST functions to correct the schema (Fix schema header idiosyncrasies)
 
