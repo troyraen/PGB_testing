@@ -257,11 +257,11 @@ def reverse_types_if_default_is_null(field):
     if isinstance(field['type'],list):
 
         try:
-            if field['default'] is None:
+            if field['default'] is None: # default is None -> reverse the list
                 new_types = field['type'][::-1]
-            else: # default is something other than null
+            else: # default is something other than null -> leave list unchanged
                 new_types = field['type']
-        except KeyError: # if default doesn't exist, reverse the list
+        except KeyError: # default not specified -> reverse the list
             new_types = field['type'][::-1]
 
         field['type'] = new_types
@@ -297,9 +297,27 @@ with open(newpath, 'wb') as out:
 
 ```
 
+## Test module in PGB_version
+<!-- fs -->
+```python
+import gen_valid_schema as gvs
+
+fin = '/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data/ztf_archive/1154446891615015011.avro'
+fout = '/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data/ztf_archive/ztf_v3_3_schema.bytes'
+
+# schema, data = gvs.load_Avro(fin)
+schema = gvs.fix_schema(fin, fout, survey='ZTF', version=3.3)
+
+with open(fout, 'rb') as f:
+    sch = f.read()
+
+```
+
+<!-- fe ## Test module in PGB_version -->
 
 
-# USE LSST functions to correct the schema (Fix schema header idiosyncrasies)
+## USE LSST functions to correct the schema (Fix schema header idiosyncrasies)
+<!-- fs -->
 
 This is giving errors related to redefined schema, [see here](https://github.com/lsst-dm/alert_stream/issues/24)
 
@@ -341,4 +359,92 @@ https://github.com/lsst-dm/alert_stream/issues/24
 newest version(s) of fastavro don't work with nested schemas when a schema is repeated
 (as is the case here)
 
+<!-- fe # USE LSST functions to correct the schema -->
+<!-- fe # Fix schema header idiosyncrasies -->
 
+
+# Sand
+<!-- fs -->
+```python
+# from fastavro import writer, parse_schema
+# parsed_schema = parse_schema(schema)
+
+# get a ZTF avro file as a bytes object to test on
+path = '/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data/ztf_archive/1154446891615015011.avro'
+with open(path, 'rb') as f:
+    fbyt = f.read()
+
+
+
+
+
+
+# types that need to be replaced:
+from collections import OrderedDict as OD
+replace_dict = OD({
+    ### fix fields that have a null default
+    ## simple fields
+    b'["float", "null"]': b'["null", "float"]',
+    b'["string", "null"]': b'["null", "string"]',
+    b'["long", "null"]': b'["null", "long"]',
+    b'["int", "null"]': b'["null", "int"]',
+    b'["double", "null"]': b'["null", "double"]',
+    ## more complex fields
+    b'["ztf.alert.cutout", "null"]': b'["null", "ztf.alert.cutout"]',
+
+    # b'[{"type": "array", "items": "ztf.alert.prv_candidate"}, "null" ]': \
+    #     b'["null", {"type": "array", "items": "ztf.alert.prv_candidate"}]',
+
+    b'[{"type": "record", "version": "3.3", "name": "cutout", "namespace": "ztf.alert", "fields": [{"type": "string", "name": "fileName"}, {"type": "bytes", "name": "stampData", "doc": "fits.gz"}], "doc": "avro alert schema"}, "null"]': \
+        b'["null", {"type": "record", "version": "3.3", "name": "cutout", "namespace": "ztf.alert", "fields": [{"type": "string", "name": "fileName"}, {"type": "bytes", "name": "stampData", "doc": "fits.gz"}], "doc": "avro alert schema"}]',
+
+    ## very comlex prv_candidates field
+    # add null to beginning of list
+    b'[{"type": "array", "items": {"type": "record", "version": "3.3", "name": "prv_candidate",': \
+        b'["null", {"type": "array", "items": {"type": "record", "version": "3.3", "name": "prv_candidate",',
+    # remove null from end of list
+    b', "null"], "name": "prv_candidates"': b'], "name": "prv_candidates"',
+
+    ### fix fields that have a default other than null
+    b'"type": ["null", "int"], "name": "tooflag", "default": 0': \
+        b'"type": ["int", "null"], "name": "tooflag", "default": 0',
+})
+
+fbytnew = fbyt[:]
+for old, new in replace_dict.items():
+    print(fbytnew.find(old))
+    fbytnew = fbytnew.replace(old, new)
+
+newpath = '/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data/ztf_archive/1154446891615015011_new.avro'
+with open(newpath, 'wb') as f:
+    f.write(fbytnew)
+# write the new file as a string so I can read it
+# newpaths = '/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data/ztf_archive/1154446891615015011_new.txt'
+# with open(newpaths, 'w') as f:
+#     f.write(fbyt)
+
+# read the new file
+with open(newpath, 'rb') as f:
+    fbyt = f.read()
+
+
+
+
+
+# SAND
+import fastavro
+
+with open(path, 'rb') as f:
+    avro_reader = fastavro.reader(f)
+    for r in avro_reader:
+        record = r
+
+itype = fbyt.find(b'"type": [')
+fsplt = fbyt.split(b'"type": [',1)
+
+import re # regex
+
+fmatch = re.match(b'"type": [', fbyt)
+
+```
+<!-- fe # Sand -->
