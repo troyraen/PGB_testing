@@ -1,5 +1,8 @@
 # Set up Google Cloud Function to grab Avro files from GCS bucket and import to BigQuery
 
+- [Java function](#Java)
+
+<a name="Java"></a>
 ## Starting with a pre-written (Java) function
 <!-- fs -->
 [AVRO/CSV Import to BigQuery from Cloud Storage with a Cloud Function](https://cloud.google.com/community/tutorials/cloud-functions-avro-import-bq)
@@ -33,6 +36,7 @@ __Gives errors.__ First is `TypeError: Cannot read property 'bucket' of undefine
 Now trying to write my own function.
 <!-- fe ## Starting with a pre-written function -->
 
+<a name="Python"></a>
 ## Writing my own cloud function (Python)
 <!-- fs -->
 Based on the previous pre-written function and the instructions at [Loading Avro data from Cloud Storage](https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-avro)
@@ -313,7 +317,197 @@ with open(fout, 'rb') as f:
 
 ```
 
-<!-- fe ## Test module in PGB_version -->
+## Test module in PGB repo/broker/alert_ingestion
+<!-- fs -->
+```python
+### Generate the schema bytes files
+# navigate to repo/broker/alert_ingestion/valid_schemas
+import gen_valid_schema as gvs
+
+fin = '/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data/ztf_archive/1154446891615015011.avro'
+fout_stub = 'ztf_v3_3'
+schema = gvs.fix_schema(fin, fout_stub, survey='ZTF', version=3.3)
+
+
+### Test the schema replacement on a bytes object
+# navigate to the top level repo directory
+from broker.alert_ingestion import format_alerts as fa
+
+fin = '/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data/ztf_archive/1154446891615015011.avro'
+with open(fin, 'rb') as f:
+    alert_bytes = f.read()
+ab = fa.format_alert_schema(alert_bytes, survey='ztf', version=3.3)
+ab == alert_bytes # returns True
+## THIS DOES NOT WORK.
+## THE SCHEMA IN alert_bytes IS DIFFERENT FROM THE ONE IN old_bytes GENERATED USING fastavro. Need to generate the original bytes file from the alert_bytes directly instead of using fastavro.
+# print alert_bytes to the terminal, copy and paste the schema portion to the old_bytes file.
+
+# read the old and new schemas from file
+finOG = 'broker/alert_ingestion/valid_schemas/ztf_v3_3_original.bytes'
+with open(finOG, 'rb') as f:
+    old_bytes = f.read()
+    old_bytes = old_bytes.strip(b'\n')
+finVAL = 'broker/alert_ingestion/valid_schemas/ztf_v3_3_valid.bytes'
+with open(finVAL, 'rb') as f:
+    new_bytes = f.read()
+    new_bytes = new_bytes.strip(b'\n')
+alert_bytes.find(old_bytes) # returns a valid index (26)
+ab = re.sub(old_bytes, new_bytes, alert_bytes)
+ab == alert_bytes # returns True... previous line DOES NOT WORK!
+ab = alert_bytes.replace(old_bytes,new_bytes)
+ab == alert_bytes # returns False... THIS WORKS!
+
+## Change format_alerts and run the previous test again
+ab == alert_bytes # returns False, so this seems to work
+
+## Now try writing the corrected alert_bytes to file and uploading to BQ
+fout = '/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data/ztf_archive/1154446891615015011_new.avro'
+with open(fout, 'wb') as f:
+    f.write(ab)
+# THIS DOES NOT WORK
+# When uploading to BQ I get the following error:
+    # Error while reading data, error message: The Apache Avro library failed to parse the header with the following error: Cannot have a string of negative length: -59
+
+## Make sure I can read Avro file -> bytes object, change nothing, write the bytes object to file, upload to BQ
+# Use the Avro file that I know works with BQ
+fin = '/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data/ztf_archive/1154446891615015011_new_WORKS.avro'
+with open(fin, 'rb') as f:
+    alert_bytes = f.read()
+fout = '/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data/ztf_archive/1154446891615015011_new.avro'
+with open(fout, 'wb') as f:
+    f.write(alert_bytes)
+# THIS WORKS
+# Now try replacing one item in the file to see if the find and replace action is causing the problem.
+new, old = b'["float", "null"]', b'["null", "float"]',
+ab = alert_bytes.replace(old,new) # switch these
+ab == alert_bytes # returns False
+ab = alert_bytes.replace(new,old) # switch them back so the schema is still valid
+ab == alert_bytes # returns True
+fout = '/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data/ztf_archive/1154446891615015011_new.avro'
+with open(fout, 'wb') as f:
+    f.write(ab)
+# THIS WORKS
+
+
+
+## Try converting old_bytes to a dict and running it through the gen_valid_schema module
+import ast
+str = old_bytes.decode("UTF-8")
+dic = ast.literal_eval(str)
+# THIS DOESN'T WORK
+# try loading the schema as a regular string
+finOG = 'broker/alert_ingestion/valid_schemas/ztf_v3_3_original.bytes'
+with open(finOG, 'r') as f:
+    old_bytes = f.read()
+    old_bytes = old_bytes.strip('\n')
+dic = ast.literal_eval(old_bytes)
+# THIS DOESN'T WORK, CAN'T LOAD THE BYTES STRING TO A DICT
+
+
+## Try replacing each substring in the bytes object directly
+fin = '/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data/ztf_archive/1154446891615015011.avro'
+with open(fin, 'rb') as f:
+    alert_bytes = f.read()
+
+replace_dict = {
+        ### fix fields that have a null default
+        ## simple fields
+        b'["float", "null"]': b'["null", "float"]',
+        b'["string", "null"]': b'["null", "string"]',
+        b'["long", "null"]': b'["null", "long"]',
+        b'["int", "null"]': b'["null", "int"]',
+        b'["double", "null"]': b'["null", "double"]',
+        ## more complex fields
+        b'["ztf.alert.cutout", "null"]': b'["null", "ztf.alert.cutout"]',
+
+        # b'[{"type": "array", "items": "ztf.alert.prv_candidate"}, "null" ]': \
+        #     b'["null", {"type": "array", "items": "ztf.alert.prv_candidate"}]',
+
+        b'[{"type": "record", "version": "3.3", "name": "cutout", "namespace": "ztf.alert", "fields": [{"type": "string", "name": "fileName"}, {"type": "bytes", "name": "stampData", "doc": "fits.gz"}], "doc": "avro alert schema"}, "null"]': \
+            b'["null", {"type": "record", "version": "3.3", "name": "cutout", "namespace": "ztf.alert", "fields": [{"type": "string", "name": "fileName"}, {"type": "bytes", "name": "stampData", "doc": "fits.gz"}], "doc": "avro alert schema"}]',
+
+        ## very comlex prv_candidates field
+        # add null to beginning of list
+        b'[{"type": "array", "items": {"type": "record", "version": "3.3", "name": "prv_candidate",': \
+            b'["null", {"type": "array", "items": {"type": "record", "version": "3.3", "name": "prv_candidate",',
+        # remove null from end of list
+        b', "null"], "name": "prv_candidates"': b'], "name": "prv_candidates"',
+
+        ### revert fields that have a default other than null
+        b'"type": ["null", "int"], "name": "tooflag", "default": 0': \
+            b'"type": ["int", "null"], "name": "tooflag", "default": 0',
+    }
+
+ab = alert_bytes[:]
+for old, new in replace_dict.items():
+    print(ab.find(old))
+    ab = ab.replace(old, new)
+ab == alert_bytes # returns FALSE, so this seems to work
+## Now try writing the corrected alert_bytes to file and uploading to BQ
+fout = '/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data/ztf_archive/1154446891615015011_new.avro'
+with open(fout, 'wb') as f:
+    f.write(ab)
+# THIS DOES NOT WORK. Get the following error when uploading to BQ
+    # Error while reading data, error message: The Apache Avro library failed to read data with the following error: vector
+
+## Check the data output in ab and alert_bytes
+# manually print these to the terminal and save to file
+f1 = '/Users/troyraen/Documents/PGB/PGB_testing/_avro2BQ/ab_data.txt'
+with open(f1, 'rb') as f:
+    ab_data = f.read()
+f2 = '/Users/troyraen/Documents/PGB/PGB_testing/_avro2BQ/alert_bytes_data.txt'
+with open(f2, 'rb') as f:
+    alert_bytes_data = f.read()
+alert_bytes_data == ab_data # RETURNS True. THE SUBSTRING SUBSTITUTION IS NOT CHANGING THE DATA
+
+## Check the find and replace action again, this time actually change some data
+fin = '/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data/ztf_archive/1154446891615015011_new_WORKS.avro'
+with open(fin, 'rb') as f:
+    alert_bytes = f.read()
+# Try replacing something trivial
+old, new = b'stampData', b'stampDat1'
+ab = alert_bytes.replace(old,new) # switch these
+ab == alert_bytes # returns False
+fout = '/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data/ztf_archive/1154446891615015011_new.avro'
+with open(fout, 'wb') as f:
+    f.write(ab)
+# THIS WORKS
+# Try changing the length of a string
+old, new = b'stampData', b'stampDat'
+ab = alert_bytes.replace(old,new) # switch these
+ab == alert_bytes # returns False
+fout = '/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data/ztf_archive/1154446891615015011_new.avro'
+with open(fout, 'wb') as f:
+    f.write(ab)
+# THIS DOES NOT WORK. BQ upload returns the following error:
+    # Error while reading data, error message: The Apache Avro library failed to parse the header with the following error: Cannot have bytes of negative length: -69427866
+
+
+## Check that fastavro can load the file
+import fastavro
+fout = '/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data/ztf_archive/1154446891615015011_new.avro'
+with open(fout, 'rb') as f:
+    avro_reader = fastavro.reader(f)
+    schema = avro_reader.writer_schema
+    for r in avro_reader:
+        data = r
+        break
+# THIS DOES NOT WORK. It fails at the line `avro_reader = fastavro.reader(f)` eith the error
+    # VUnicodeDecodeError: 'utf-8' codec can't decode byte 0xe5 in position 1: invalid continuation byte
+
+
+# Try reading fout back in and reversing the above change
+with open(fout, 'rb') as f:
+    alert_bytes = f.read()
+ab = alert_bytes.replace(new,old) # switch these back
+ab == alert_bytes # returns False
+with open(fout, 'wb') as f:
+    f.write(ab)
+# THIS WORKS
+
+```
+
+<!-- fe ## Test module in PGB repo/broker/alert_ingestion -->
 
 
 ## USE LSST functions to correct the schema (Fix schema header idiosyncrasies)
@@ -362,6 +556,7 @@ newest version(s) of fastavro don't work with nested schemas when a schema is re
 <!-- fe # USE LSST functions to correct the schema -->
 <!-- fe # Fix schema header idiosyncrasies -->
 
+<!-- fe # Fix schema header idiosyncrasies -->
 
 # Sand
 <!-- fs -->
