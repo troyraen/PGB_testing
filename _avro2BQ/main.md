@@ -1,6 +1,16 @@
 # Set up Google Cloud Function to grab Avro files from GCS bucket and import to BigQuery
 
 - [Java function](#Java)
+- [Python function](#Python)
+- [Create BigQuery Table via file upload (GUI)](#BQupload)
+    - Schema headers in the Avro files do not meet BQ's strict compliance requirements. BQ cannot create (or append to) the table using these files.
+- [Fix schema header](#header)
+    - [use Fastavro to fix the schema and write a new file](#fastavro)
+    - [Replace the schema in the `alert_bytes` object directly](#replace_bytes)
+    - [Write `alert_bytes` to temporary file and use Fastavro to replace the schema](#tempfile)
+    - [Generate the schema from multiple files (based on LSST code)](#lsst)
+- [Sandbox](#sand)
+
 
 <a name="Java"></a>
 ## Starting with a pre-written (Java) function
@@ -184,6 +194,7 @@ print("Loaded {} rows.".format(destination_table.num_rows))
 ``` -->
 <!-- fe ## Writing my own cloud function -->
 
+<a name="BQupload"></a>
 ## Trying to create a BQ table via direct upload of an Avro file
 <!-- fs -->
 Getting the following error:
@@ -235,11 +246,12 @@ __See email from Eric Bellm. Problem seems to be that the default value (which s
 
 <!-- fe ## Trying to create a BQ table via direct upload of an Avro file -->
 
-
+<a name="header"></a>
 # Fix schema header idiosyncrasies
 <!-- fs -->
-This fix is going in the `alert_ingestion.format_alerts` module.
+This fix is going in the `alert_ingestion.format_alerts` module which will be called by the `consume` module.
 
+<a name="fastavro"></a>
 THIS WORKS AND BQ CAN AUTOMATICALLY CREATE A TABLE FROM IT
 
 ```python
@@ -297,9 +309,9 @@ with open(newpath, 'wb') as out:
     fastavro.writer(out, schema, [data])
 
 # THIS WORKS AND BQ CAN AUTOMATICALLY CREATE A TABLE FROM IT
-
-
 ```
+
+Write the valid schema to a file so that we can use it to replace all version 3.3 schema headers.
 
 ## Test module in PGB_version
 <!-- fs -->
@@ -316,12 +328,20 @@ with open(fout, 'rb') as f:
     sch = f.read()
 
 ```
+<!-- fe ## Test module in PGB_version -->
 
+<a name="replace_bytes"></a>
 ## Test module in PGB repo/broker/alert_ingestion
 <!-- fs -->
+Generate the valid schema file and use it to replace the schema header directly in the `alert_bytes` object.
+
+THIS DOES NOT WORK. The bytes object seems to be written in a way that encodes header information outside the human readable schema so that replacing the human readable parts breaks the encoding. Instead, use fastavro (see [next section](#tempfile))
+
 ```python
 ### Generate the schema bytes files
 # navigate to repo/broker/alert_ingestion/valid_schemas
+
+# Generate the file holding the valid 3.3 schema.
 import gen_valid_schema as gvs
 
 fin = '/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data/ztf_archive/1154446891615015011.avro'
@@ -556,8 +576,8 @@ newest version(s) of fastavro don't work with nested schemas when a schema is re
 <!-- fe # USE LSST functions to correct the schema -->
 <!-- fe # Fix schema header idiosyncrasies -->
 
-<!-- fe # Fix schema header idiosyncrasies -->
 
+<a name="sand"></a>
 # Sand
 <!-- fs -->
 ```python
