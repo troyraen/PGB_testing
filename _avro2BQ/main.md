@@ -526,10 +526,200 @@ with open(fout, 'wb') as f:
 # THIS WORKS
 
 ```
-
 <!-- fe ## Test module in PGB repo/broker/alert_ingestion -->
 
+<a name="tempfile"></a>
+## Write `alert_bytes` to temporary file and use Fastavro to replace the schema
+<!-- fs -->
+High level logic is the following:
+1. write the `alert_bytes` object to a temporary file
+2. read it in with fastavro
+3. write a new temporary file with the alert packet data and a valid schema
+4. read that file back in to a bytes object and dump to GCS
 
+This will be integrated into the `consume` module which does items 1 and 4.
+
+```python
+from tempfile import SpooledTemporaryFile
+# from tempfile import NamedTemporaryFile
+import fastavro
+# import json
+import pickle
+
+from broker.alert_ingestion.valid_schemas import gen_valid_schema as gvs
+
+fin = '/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data/ztf_archive/1154446891615015011.avro'
+fvalidsch = '/Users/troyraen/Documents/PGB/repo/broker/alert_ingestion/valid_schemas/ztf_v3_3_valid.pkl'
+fout = '/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data/ztf_archive/1154446891615015011_new.avro'
+
+# generate a file containing the valid schema such that it can be read back in as a dict
+schema, data = gvs._load_Avro(fin) # load the file
+valid_schema = gvs._fix_schema_ZTF_v3_3(schema) # get the corrected schema
+with open(fvalidsch, 'wb') as file:
+    pickle.dump(valid_schema,file) # write the dict to a pkl file
+with open(fvalidsch, 'rb') as file:
+    schema_from_file = pickle.load(file) # read the dict back in to check last. THIS WORKS
+
+# get alert_bytes object
+with open(fin, 'rb') as f:
+    alert_bytes = f.read()
+
+# function that fixes the schema in the temp_file
+def fix_schema(temp_file):
+    # load the file with fastavro
+    avro_reader = fastavro.reader(temp_file)
+    schema = avro_reader.writer_schema
+    for r in avro_reader:
+        data = r
+        break
+    # avro_reader = fastavro.reader(temp_file, reader_schema=valid_schema)
+
+    with open(fvalidsch, 'rb') as file: # get the corrected schema
+        valid_schema = pickle.load(file)
+
+    # with SpooledTemporaryFile(max_size=max_alert_packet_size, mode='w+b') as new_temp_file:
+        # fastavro.writer(new_temp_file, valid_schema, [data])
+        # temp_file.seek(0)
+        # temp_file = new_temp_file.copy()
+    # THIS DOES NOT WORK, gives error:
+        # AttributeError: 'SpooledTemporaryFile' object has no attribute 'seekable'
+    # with NamedTemporaryFile(mode='w+b') as new_temp_file:
+        # fastavro.writer(... use code from above
+    # THIS WORKS, but we cannot copy the NamedTemporaryFile to a SpooledTemporaryFile and we want to use the SpooledTemporaryFile object. Solution is to modify the TempAlertFile class to include a `seekable` attribute.
+    temp_file.seek(0)
+    fastavro.writer(temp_file, valid_schema, [data])
+        # temp_file.seek(0)
+        # temp_file = new_temp_file.copy()
+
+    return temp_file
+
+# this class is from `consume.py`, and we have added the `seekable` attribute so that fastavro can write to it
+class TempAlertFile(SpooledTemporaryFile):
+    """Subclass of SpooledTemporaryFile that is tied into the log
+    Log warning is issued when file rolls over onto disk.
+    """
+    def rollover(self) -> None:
+        """Move contents of the spooled file from memory onto disk"""
+        log.warning(f'Alert size exceeded max memory size: {self._max_size}')
+        super().rollover()
+    @property
+    def readable(self):
+        return self._file.readable
+    @property
+    def writable(self):
+        return self._file.writable
+    @property
+    def seekable(self): # this is necessary so that fastavro can write to the file
+        return self._file.seekable
+
+# generate a temporary file and call the function to fix the schema
+max_alert_packet_size = 150000
+with TempAlertFile(max_size=max_alert_packet_size, mode='w+b') as temp_file:
+    # with NamedTemporaryFile(mode='w+b') as temp_file:
+    temp_file.write(alert_bytes)
+    temp_file.seek(0)
+
+    temp_file = fix_schema(temp_file)
+
+    # test that this worked by gettin the data and schema so can close file and then write a corrected Avro file to disk (then upload to BQ to see if it works)
+    temp_file.seek(0)
+    avro_reader = fastavro.reader(temp_file)
+    schema = avro_reader.writer_schema
+    for r in avro_reader:
+        data = r
+        break
+
+with open(fout, 'wb') as f:
+    fastavro.writer(f, schema, [data])
+
+# THIS WORKS! meaning it generates a valid Avro file that BQ can successfully create a table from
+
+```
+
+Port this into the broker. In `consume.py`, the function `upload_bytes_to_bucket` has this snippet:
+```python
+with TempAlertFile(max_size=max_alert_packet_size, mode='w+b') as temp_file:
+            temp_file.write(data)
+            temp_file.seek(0)
+            blob.upload_from_file(temp_file)
+```
+Between the `seek` and `upload_from_file`, need to insert a function call, where the function does the following:
+- get the survey and version
+- load the valid schema from file
+- use fastavro to:
+    - read the temp_file in (to get the data)
+    - write the valid schema and the data back out to the temp_file
+
+Test the function outside of `consume`:
+```python
+import pickle
+import fastavro
+from tempfile import SpooledTemporaryFile
+def fix_schema(temp_file: TempAlertFile, survey: str, version: float) -> None:
+    # get the corrected schema, if it exists
+    try:
+        f = f'/Users/troyraen/Documents/PGB/repo/broker/alert_ingestion/valid_schemas/{survey}_v{version}.pkl'
+        with open(f, 'rb') as file:
+            valid_schema = pickle.load(file)
+
+    except FileNotFoundError:
+        return
+
+    # load the file and get the data with fastavro
+    data = []
+    temp_file.seek(0)
+    for r in fastavro.reader(temp_file):
+        data.append(r)
+
+    # write the corrected file
+    temp_file.seek(0)
+    fastavro.writer(temp_file, valid_schema, data)
+    temp_file.truncate() # truncate at current position (removes leftover data)
+
+    return
+
+fin = '/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data/ztf_archive/1154446891615015011.avro'
+fout = '/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data/ztf_archive/1154446891615015011_new.avro'
+
+with open(fin, 'rb') as f:
+    alert_bytes = f.read()
+
+# from broker.alert_ingestion import format_alerts as fa
+# survey = fa.guess_schema_survey(alert_bytes)
+# version = fa.guess_schema_version(alert_bytes)
+survey, version = 'ztf', 3.3
+max_alert_packet_size = 150000
+with TempAlertFile(max_size=max_alert_packet_size, mode='w+b') as temp_file:
+    temp_file.write(alert_bytes)
+    temp_file.seek(0)
+    fix_schema(temp_file, survey, version)
+
+    # test that this worked by gettin the data and schema so can close file and then write a corrected Avro file to disk (then upload to BQ to see if it works)
+    temp_file.seek(0)
+    avro_reader = fastavro.reader(temp_file)
+    schema = avro_reader.writer_schema
+    for r in avro_reader:
+        data = r
+        break
+
+with open(fout, 'wb') as f:
+    fastavro.writer(f, schema, [data])
+# THIS WORKS! meaning it generates a valid Avro file that BQ can successfully create a table from
+```
+
+Test `gen_valid_schema`. It should take in the Avro file path and write the schema dict as a pickle file.
+```python
+from broker.alert_ingestion.valid_schemas import gen_valid_schema as gvs
+fin = '/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data/ztf_archive/1154446891615015011.avro'
+survey, version = 'ztf', 3.3
+valid_schema = gvs.write_valid_schema(fin, survey, version)
+```
+This works.
+
+<!-- fe ## Write `alert_bytes` to temporary file and use Fastavro to replace the schema -->
+
+
+<a name="lsst"></a>
 ## USE LSST functions to correct the schema (Fix schema header idiosyncrasies)
 <!-- fs -->
 
