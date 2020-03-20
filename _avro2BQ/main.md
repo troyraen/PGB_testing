@@ -2,8 +2,11 @@
 
 - [Java package](#Java)
 - [Python function](#Python)
+    - [Create module](#create_gcs2BQ)
+    - [Test module](#test_gcs2BQ)
+    - [Install Google Cloud SDK](#gcloudsdk)
 - [Create BigQuery Table via file upload (GUI)](#BQupload)
-    - Schema headers in the Avro files do not meet BQ's strict compliance requirements. BQ cannot create (or append to) the table using these files.
+    - Schema headers in the ZTF version 3.3 Avro files do not meet BQ's strict compliance requirements. BQ cannot create (or append to) the table using the original files.
 - [Fix schema header](#header)
     - [use Fastavro to fix the schema and write a new file](#fastavro)
     - [Replace the schema in the `alert_bytes` object directly](#replace_bytes)
@@ -57,6 +60,7 @@ _Note: This did not work until I reformatted the incoming alerts (see below) so 
 
 Based on the previous pre-written package and the instructions at [Loading Avro data from Cloud Storage](https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-avro)
 
+<a name="create_gcs2BQ"></a>
 ### Creating the `gcs2BQ` module
 <!-- fs -->
 From [Cloud Function](https://console.cloud.google.com/functions/list?project=ardent-cycling-243415), `CREATE FUNCTION`.
@@ -205,16 +209,30 @@ print("Loaded {} rows.".format(destination_table.num_rows))
 
 <!-- fe ### Creating the `gcs2BQ` module -->
 
+<a name="test_gcs2BQ"></a>
 ### Testing the `gcs2BQ` module
+
+- The module must be named `main.py`.
+- See below to install the gcloud SDK.
 
 From instructions on GCS triggers [here](https://cloud.google.com/functions/docs/calling/storage):
 
+Deploy the module:
 > To deploy the function with an object finalize trigger, run the following command in the directory that contains the function code:
 > `gcloud functions deploy hello_gcs_generic --runtime python37 --trigger-resource YOUR_TRIGGER_BUCKET_NAME --trigger-event google.storage.object.finalize`
 
 Specific to my setup:
 `gcloud functions deploy streaming --runtime python37 --trigger-resource gcs_avro_to_bigquery_test --trigger-event google.storage.object.finalize`
 
+In response to the prompt `Allow unauthenticated invocations of new function [streaming]? (y/N)?`, I chose `N` and got the following message: `WARNING: Function created with limited-access IAM policy. To enable unauthorized access consider "gcloud alpha functions add-iam-policy-binding streaming --member=allUsers --role=roles/cloudfunctions.invoker"`
+
+
+__Getting error message saying google.cloud.bigquery can't be imported (unknown location)__
+
+
+<a name="gcloudsdk"></a>
+### Installing Google Cloud SDK
+<!-- fs -->
 Need to install the Google Cloud SDK for the command line (currently installed dependencies from `requirements.txt` are Python-specific).
 
 - [Quickstart and how-to guides](https://cloud.google.com/sdk/docs/quickstarts) (see side panel)
@@ -225,7 +243,39 @@ Trying the Conda install
 ```bash
 pgbenv
 conda install -c conda-forge google-cloud-sdk
+gcloud components update
 ```
+
+This works, however I can't figure out who actually developed the package. It _seems_ to be an official Google package (based on links listed on the webpage and those provided in the message printed to the screen when running `gcloud components update`). However the Conda install option is not listed in any official documentation (i.e. quickstart guides listed above).
+
+Now follow the instructions [here](https://cloud.google.com/sdk/docs/quickstart-macos) to initialize.
+```bash
+gcloud init --console-only
+# follow the onscreen prompts
+```
+
+Helpful output from the initialization:
+> Created a default .boto configuration file at [/Users/troyraen/.boto]. See this file and
+> [https://cloud.google.com/storage/docs/gsutil/commands/config] for more
+> information about configuring Google Cloud Storage.
+> Your Google Cloud SDK is configured and ready to use!
+>
+> * Commands that require authentication will use troy.raen.pitt@gmail.com by default
+> * Commands will reference project `ardent-cycling-243415` by default
+> * Compute Engine commands will use region `us-east1` by default
+> * Compute Engine commands will use zone `us-east1-b` by default
+>
+> Run `gcloud help config` to learn how to change individual settings
+>
+> This gcloud configuration is called [default]. You can create additional configurations if you work with multiple accounts and/or projects.
+> Run `gcloud topic configurations` to learn more.
+>
+> Some things to try next:
+>
+> * Run `gcloud --help` to see the Cloud Platform services you can interact with. And run `gcloud help COMMAND` to get help on any gcloud command.
+> * Run `gcloud topic --help` to learn about advanced features of the SDK like arg files and output formatting
+
+<!-- fe ### Installing Google Cloud SDK -->
 
 
 <!-- fe ## Writing my own cloud function -->
