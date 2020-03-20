@@ -209,11 +209,13 @@ print("Loaded {} rows.".format(destination_table.num_rows))
 
 <!-- fe ### Creating the `gcs2BQ` module -->
 
+
 <a name="test_gcs2BQ"></a>
 ### Testing the `gcs2BQ` module
 
 - The module must be named `main.py`.
 - See below to install the gcloud SDK.
+- Dependencies for a Cloud Function must be specified in a `requirements.txt` file (or packaged with the function) in the same directory as `main.py`. See [this documentation](https://cloud.google.com/functions/docs/writing/specifying-dependencies-python).
 
 From instructions on GCS triggers [here](https://cloud.google.com/functions/docs/calling/storage):
 
@@ -226,8 +228,25 @@ Specific to my setup:
 
 In response to the prompt `Allow unauthenticated invocations of new function [streaming]? (y/N)?`, I chose `N` and got the following message: `WARNING: Function created with limited-access IAM policy. To enable unauthorized access consider "gcloud alpha functions add-iam-policy-binding streaming --member=allUsers --role=roles/cloudfunctions.invoker"`
 
+__The function is now running.__ Check the status [here](https://console.cloud.google.com/functions/).
 
-__Getting error message saying google.cloud.bigquery can't be imported (unknown location)__
+~Manually uploaded a file to the bucket. Cloud function failed with the following error (written to the log): `UnicodeDecodeError: 'utf-8' codec can't decode byte 0xa4 in position 33: invalid start byte`. Trying to load to json locally...~
+
+```python
+import json
+finworks = '/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data/ztf_archive/1154446891615015011_new_WORKS.avro'
+fin = '/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data/ztf_archive/1154446891615015011.avro'
+with open(finworks, 'rb') as f:
+    alert_bytes = f.read()
+    # data_str = alert_bytes.decode("utf-8")
+    row = json.loads(alert_bytes)
+```
+
+~This gives exactly the same error as in the logging (above).
+This seems to be a Python problem, see [this github issue](https://github.com/fastavro/fastavro/issues/69).~
+
+NO NEED TO USE JSON... I was combining scripts from two different places. The call to json is unnecessary as the row upload to BQ happens in the command load_job = BQ.load_table_from_uri().
+
 
 
 <a name="gcloudsdk"></a>
