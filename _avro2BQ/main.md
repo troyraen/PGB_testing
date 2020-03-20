@@ -1,6 +1,6 @@
 # Set up Google Cloud Function to grab Avro files from GCS bucket and import to BigQuery
 
-- [Java function](#Java)
+- [Java package](#Java)
 - [Python function](#Python)
 - [Create BigQuery Table via file upload (GUI)](#BQupload)
     - Schema headers in the Avro files do not meet BQ's strict compliance requirements. BQ cannot create (or append to) the table using these files.
@@ -13,8 +13,11 @@
 
 
 <a name="Java"></a>
-## Starting with a pre-written (Java) function
+## Starting with a pre-written (Java) package
 <!-- fs -->
+
+_Note: Couldn't get this to work. Don't want to use a Java package anyway.. found some example Python code to try (see below)_
+
 [AVRO/CSV Import to BigQuery from Cloud Storage with a Cloud Function](https://cloud.google.com/community/tutorials/cloud-functions-avro-import-bq)
 
 > This tutorial demonstrates using a Cloud Function to create a serverless cron scheduled import for data management or data science workflows. One such use case would be when a third party provides data uploaded to a Cloud Storage bucket on a regular basis in a GCP project. Instead of manually importing the CSV or AVRO to BigQuery each day, you can use a cloud function with a trigger on object.finalize on a set bucket. This way, whenever a CSV or an AVRO file is uploaded to that bucket, the function imports the file to a new BigQuery table to the specified dataset.
@@ -49,8 +52,13 @@ Now trying to write my own function.
 <a name="Python"></a>
 ## Writing my own cloud function (Python)
 <!-- fs -->
-Based on the previous pre-written function and the instructions at [Loading Avro data from Cloud Storage](https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-avro)
 
+_Note: This did not work until I reformatted the incoming alerts (see below) so that the schema header is valid under the strict Avro file requirements that BQ requires._
+
+Based on the previous pre-written package and the instructions at [Loading Avro data from Cloud Storage](https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-avro)
+
+### Creating the `gcs2BQ` module
+<!-- fs -->
 From [Cloud Function](https://console.cloud.google.com/functions/list?project=ardent-cycling-243415), `CREATE FUNCTION`.
 
 Name = `GCS-Avro-to-BigQuery`
@@ -86,8 +94,8 @@ def streaming(data, context):
     load_job.result()  # Waits for table load to complete.
     # print("Job finished.")
 
-    # destination_table = BQ.get_table(table_ref)
-    # print("Loaded {} rows.".format(destination_table.num_rows))
+    destination_table = BQ.get_table(table_ref)
+    print("Loaded {} rows.".format(destination_table.num_rows))
 
 
     # db_ref = DB.document(u'streaming_files/%s' % file_name)
@@ -169,6 +177,8 @@ class BigQueryError(Exception):
             err.extend(error['errors'])
         return json.dumps(err)
 ```
+
+
 <!-- start with the code at [Loading Avro data into a new table](https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-avro#loading_avro_data_into_a_new_table) and modify as follows:
 
 ```python
@@ -192,7 +202,34 @@ print("Job finished.")
 destination_table = client.get_table(dataset_ref.table("us_states"))
 print("Loaded {} rows.".format(destination_table.num_rows))
 ``` -->
+
+<!-- fe ### Creating the `gcs2BQ` module -->
+
+### Testing the `gcs2BQ` module
+
+From instructions on GCS triggers [here](https://cloud.google.com/functions/docs/calling/storage):
+
+> To deploy the function with an object finalize trigger, run the following command in the directory that contains the function code:
+> `gcloud functions deploy hello_gcs_generic --runtime python37 --trigger-resource YOUR_TRIGGER_BUCKET_NAME --trigger-event google.storage.object.finalize`
+
+Specific to my setup:
+`gcloud functions deploy streaming --runtime python37 --trigger-resource gcs_avro_to_bigquery_test --trigger-event google.storage.object.finalize`
+
+Need to install the Google Cloud SDK for the command line (currently installed dependencies from `requirements.txt` are Python-specific).
+
+- [Quickstart and how-to guides](https://cloud.google.com/sdk/docs/quickstarts) (see side panel)
+- [Manual download and install](https://cloud.google.com/sdk/install)
+- [Conda install](https://anaconda.org/conda-forge/google-cloud-sdk)
+
+Trying the Conda install
+```bash
+pgbenv
+conda install -c conda-forge google-cloud-sdk
+```
+
+
 <!-- fe ## Writing my own cloud function -->
+
 
 <a name="BQupload"></a>
 ## Trying to create a BQ table via direct upload of an Avro file
@@ -252,6 +289,8 @@ __See email from Eric Bellm. Problem seems to be that the default value (which s
 This fix is going in the `alert_ingestion.format_alerts` module which will be called by the `consume` module.
 
 <a name="fastavro"></a>
+## Fix using Fastavro (outside broker environment)
+<!-- fs -->
 THIS WORKS AND BQ CAN AUTOMATICALLY CREATE A TABLE FROM IT
 
 ```python
@@ -310,6 +349,7 @@ with open(newpath, 'wb') as out:
 
 # THIS WORKS AND BQ CAN AUTOMATICALLY CREATE A TABLE FROM IT
 ```
+<!-- fe ## Fix using Fastavro -->
 
 Write the valid schema to a file so that we can use it to replace all version 3.3 schema headers.
 
@@ -718,6 +758,63 @@ This works.
 
 <!-- fe ## Write `alert_bytes` to temporary file and use Fastavro to replace the schema -->
 
+<a name="writetests"></a>
+## Write tests for the fix
+<!-- fs -->
+Hacking to create the `test_format_alerts` module in the tests directory of the repo.
+
+```python
+from pathlib import Path
+import os
+
+test_alerts_dir = Path('/Users/troyraen/Documents/PGB/repo/tests/test_alerts')
+
+def get_survey_and_schema(filename: str) -> (str, float):
+    f = filename.split('_')
+    survey = f[0]
+    version = float('.'.join(f[1].strip('v').split('-')))
+    return (survey, version)
+
+def _load_Avro(fin):
+    f = open(fin, 'rb') if type(fin)==str else fin
+
+    avro_reader = fastavro.reader(f)
+    schema = avro_reader.writer_schema
+    data = []
+    for r in avro_reader:
+        data.append(r)
+
+    if type(fin)==str: f.close()
+
+    return schema, data
+
+# def test_data_unchanged():
+max_size = 150000
+def test_data_unchanged():
+    for path in test_alerts_dir.glob('*.avro'):
+        __, original_data = _load_Avro(str(path))
+
+        survey, version = get_survey_and_schema(path.name)
+        max_size = 150000
+        with consume.TempAlertFile(max_size=max_size, mode='w+b') as temp_file:
+            with open(path, 'rb') as f:
+                temp_file.write(f.read())
+            temp_file.seek(0)
+            consume.GCSKafkaConsumer.fix_schema(temp_file, survey, version)
+            temp_file.seek(0)
+            __, corrected_data = _load_Avro(temp_file)
+
+        print(original_data == corrected_data)
+
+```
+
+Test the module
+```python
+import tests.test_format_alerts as tfa
+a = AlertFormattingDataUnchanged()
+```
+
+<!-- fe ## Write tests for the fix -->
 
 <a name="lsst"></a>
 ## USE LSST functions to correct the schema (Fix schema header idiosyncrasies)
