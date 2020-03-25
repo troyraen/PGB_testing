@@ -12,6 +12,7 @@
     - [Replace the schema in the `alert_bytes` object directly](#replace_bytes)
     - [Write `alert_bytes` to temporary file and use Fastavro to replace the schema](#tempfile)
     - [Generate the schema from multiple files (based on LSST code)](#lsst)
+- [Run PEP8](#pep8)
 - [Sandbox](#sand)
 
 
@@ -879,8 +880,25 @@ def test_data_unchanged():
 
 Test the module
 ```python
-import tests.test_format_alerts as tfa
-a = AlertFormattingDataUnchanged()
+from tests import test_format_alerts as tfa
+
+# test that formatting leaves data unchanged
+a = tfa.AlertFormattingDataUnchanged()
+a.test_data_unchanged_ztf_3_3()
+# THIS WORKS
+
+# test that reformatted file can be uploaded to BQ
+a = tfa.AlertFormattedForBigQuery()
+a.setUpClass()
+a.test_BQupload_ztf_3_3()
+# THIS WORKS
+# Now trying to make this break:
+# using a dataset that does not exist gives
+    # NotFound: 404 POST https://www.googleapis.com/upload/bigquery/v2/projects/ardent-cycling-243415/jobs?uploadType=resumable: Not found: Dataset ardent-cycling-243415:test_AlertFormattedForBigQuery1
+# uploading a ZTFv3.3 file without reformatting it first gives
+    # BadRequest: 400 Error while reading data, error message: The Apache Avro library failed to parse the header with the following error: Unexpected type for default value. Expected double, but found null: null
+
+
 ```
 
 <!-- fe ## Write tests for the fix -->
@@ -932,6 +950,24 @@ newest version(s) of fastavro don't work with nested schemas when a schema is re
 <!-- fe # USE LSST functions to correct the schema -->
 <!-- fe # Fix schema header idiosyncrasies -->
 
+<a name="pep8"></a>
+# Run PEP8
+This has been renamed to `pycodestyle`.
+
+```bash
+pgbrepo
+pgbenv
+pip install pycodestyle
+
+cd broker/alert_ingestion
+pycodestyle consume.py
+pycodestyle gen_valid_schema.py
+
+cd.
+cd.
+cd tests
+pycodestyle test_format_alerts.py
+```
 
 <a name="sand"></a>
 # Sand
