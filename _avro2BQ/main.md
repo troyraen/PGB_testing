@@ -59,154 +59,60 @@ Now trying to write my own function.
 
 _Note: This did not work until I reformatted the incoming alerts (see below) so that the schema header is valid under the strict Avro file requirements that BQ requires._
 
-Based on the previous pre-written package and the instructions at [Loading Avro data from Cloud Storage](https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-avro)
+Based on the previous pre-written package and the instructions at [Loading Avro data from Cloud Storage](https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-avro). Also using the code at [this repo](https://github.com/GoogleCloudPlatform/solutions-gcs-bq-streaming-functions-python/blob/master/functions/streaming/main.py).
 
 <a name="create_gcs2BQ"></a>
 ### Creating the `gcs2BQ` module
 <!-- fs -->
-From [Cloud Function](https://console.cloud.google.com/functions/list?project=ardent-cycling-243415), `CREATE FUNCTION`.
 
-Name = `GCS-Avro-to-BigQuery`
+Using the web interface:
+    1. From [Cloud Function](https://console.cloud.google.com/functions/list?project=ardent-cycling-243415), `CREATE FUNCTION`.
+    2. Name = `GCS-Avro-to-BigQuery`
+    3. Runtime = `Python 3.7`
+    4. For the function code in `main.py`, use the instruction and repo links above.
 
-Runtime = `Python 3.7`
+Now put this into a module in `gcs2BQ/main.py`. Module should:
+    1. accept the data as input
+    2. create a load_job
+    3. ~check for duplicates~ Only way to do this is to query the database which could be very expensive. Recommended to insert duplicates and handle their removal later. See [this post](https://stackoverflow.com/questions/39853782/check-if-data-already-exists-before-inserting-into-bigquery-table-using-python).
+    4. run the job
+    5. handle errors
 
-For the function code in `main.py`, start with the code at [this repo](https://github.com/GoogleCloudPlatform/solutions-gcs-bq-streaming-functions-python/blob/master/functions/streaming/main.py) and modify to the following:
+
+__Error handling__
+
+Trying `error_result` and `errors` attributes of `load_job` from [this page](https://googleapis.dev/python/bigquery/latest/_modules/google/cloud/bigquery/job.html#LoadJob).
+
 ```python
-from google.cloud import bigquery
-# from google.cloud import storage
-PROJECT_ID = os.getenv('GCP_PROJECT')
-BQ_DATASET = 'GCS_Avro_to_BigQuery_test'
-BQ_TABLE = 'test_table_1'
-# CS = storage.Client()
-BQ = bigquery.Client()
+# Put these in main.py
 
-def streaming(data, context):
-    '''This function is executed whenever a file is added to Cloud Storage'''
-    bucket_name = data['bucket']
-    file_name = data['name']
+eres = load_job.error_result
+if eres is not None:
+    log.error(f'{eres}')
+else:
+    log.info(f'stream_GCS_to_BQ job {load_job.job_id} completed successfully')
 
-    # from https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-avro
-    table_ref = BQ.dataset(BQ_DATASET).table(BQ_TABLE)
-    job_config = bigquery.LoadJobConfig()
-    job_config.write_disposition = bigquery.WriteDisposition.WRITE_APPEND
-    job_config.source_format = bigquery.SourceFormat.AVRO
-    uri = f"gs://{bucket_name}/{file_name}"
-    load_job = BQ.load_table_from_uri(
-        uri, table_ref, job_config=job_config
-    )  # API request
-    # print("Starting job {}".format(load_job.job_id))
+eres = load_job.errors
+if eres is not None:
+    log.error(f'{eres}')
+else:
+    log.info(f'stream_GCS_to_BQ job {load_job.job_id} completed successfully')
 
-    load_job.result()  # Waits for table load to complete.
-    # print("Job finished.")
-
-    destination_table = BQ.get_table(table_ref)
-    print("Loaded {} rows.".format(destination_table.num_rows))
-
-
-    # db_ref = DB.document(u'streaming_files/%s' % file_name)
-    # if _was_already_ingested(db_ref):
-    #     _handle_duplication(db_ref)
-    # else:
-    try:
-        _insert_into_bigquery(bucket_name, file_name)
-        _handle_success(db_ref)
-    except Exception:
-        _handle_error(db_ref)
-
-
-def _was_already_ingested(db_ref):
-    status = db_ref.get()
-    return status.exists and status.to_dict()['success']
-
-
-def _handle_duplication(db_ref):
-    dups = [_now()]
-    data = db_ref.get().to_dict()
-    if 'duplication_attempts' in data:
-        dups.extend(data['duplication_attempts'])
-    db_ref.update({
-        'duplication_attempts': dups
-    })
-    logging.warn('Duplication attempt streaming file \'%s\'' % db_ref.id)
-
-
-def _insert_into_bigquery(bucket_name, file_name):
-    blob = CS.get_bucket(bucket_name).blob(file_name)
-    row = json.loads(blob.download_as_string())
-    table = BQ.dataset(BQ_DATASET).table(BQ_TABLE)
-    errors = BQ.insert_rows_json(table,
-                                 json_rows=[row],
-                                 row_ids=[file_name],
-                                 retry=retry.Retry(deadline=30))
-    if errors != []:
-        raise BigQueryError(errors)
-
-
-def _handle_success(db_ref):
-    message = 'File \'%s\' streamed into BigQuery' % db_ref.id
-    doc = {
-        u'success': True,
-        u'when': _now()
-    }
-    db_ref.set(doc)
-    PS.publish(SUCCESS_TOPIC, message.encode('utf-8'), file_name=db_ref.id)
-    logging.info(message)
-
-
-def _handle_error(db_ref):
-    message = 'Error streaming file \'%s\'. Cause: %s' % (db_ref.id, traceback.format_exc())
-    doc = {
-        u'success': False,
-        u'error_message': message,
-        u'when': _now()
-    }
-    db_ref.set(doc)
-    PS.publish(ERROR_TOPIC, message.encode('utf-8'), file_name=db_ref.id)
-    logging.error(message)
-
-
-def _now():
-    return datetime.utcnow().replace(tzinfo=pytz.utc).strftime('%Y-%m-%d %H:%M:%S %Z')
-
-
-class BigQueryError(Exception):
-    '''Exception raised whenever a BigQuery error happened'''
-
-    def __init__(self, errors):
-        super().__init__(self._format(errors))
-        self.errors = errors
-
-    def _format(self, errors):
-        err = []
-        for error in errors:
-            err.extend(error['errors'])
-        return json.dumps(err)
 ```
 
+Test by uploading a file with an incorrect (non-reformatted) schema. Looking at the GCP log [here](https://console.cloud.google.com/logs/viewer?project=ardent-cycling-243415):
+    - With no explicit error handling: get a Traceback error that includes `error message: The Apache Avro library failed to parse the header with the following error: Unexpected type for default value. Expected double, but found null: null`
+    - Using `error_result`: get the Traceback error from above, plus an entry that says `Error detected in stream_GCS_to_BQ`.
+    - Using `errors`: only get the Traceback error from above.
 
-<!-- start with the code at [Loading Avro data into a new table](https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-avro#loading_avro_data_into_a_new_table) and modify as follows:
+__Questions__
+1. Since the appropriate error is logged automatically after calling `load_job.result()`, do I also need to explicitly log the error?
+2. Where is the logging usually recorded (when running code locally)?
+3. Where is the logging recorded when running with GCP?
+    - These logs seem to be tied in to the GCP Logs... are they also recorded elsewhere?
 
-```python
-from google.cloud import bigquery
-client = bigquery.Client()
-dataset_id = 'GCS_Avro_to_BigQuery_test'
 
-dataset_ref = client.dataset(dataset_id)
-job_config = bigquery.LoadJobConfig()
-job_config.source_format = bigquery.SourceFormat.AVRO
-uri = "gs://cloud-samples-data/bigquery/us-states/us-states.avro"
 
-load_job = client.load_table_from_uri(
-    uri, dataset_ref.table("us_states"), job_config=job_config
-)  # API request
-print("Starting job {}".format(load_job.job_id))
-
-load_job.result()  # Waits for table load to complete.
-print("Job finished.")
-
-destination_table = client.get_table(dataset_ref.table("us_states"))
-print("Loaded {} rows.".format(destination_table.num_rows))
-``` -->
 
 <!-- fe ### Creating the `gcs2BQ` module -->
 
@@ -220,34 +126,13 @@ print("Loaded {} rows.".format(destination_table.num_rows))
 
 From instructions on GCS triggers [here](https://cloud.google.com/functions/docs/calling/storage):
 
-Deploy the module:
+__Deploy the module:__
 > To deploy the function with an object finalize trigger, run the following command in the directory that contains the function code:
-> `gcloud functions deploy hello_gcs_generic --runtime python37 --trigger-resource YOUR_TRIGGER_BUCKET_NAME --trigger-event google.storage.object.finalize`
-
-Specific to my setup:
-`gcloud functions deploy streaming --runtime python37 --trigger-resource gcs_avro_to_bigquery_test --trigger-event google.storage.object.finalize`
+`gcloud functions deploy stream_GCS_to_BQ --runtime python37 --trigger-resource gcs_avro_to_bigquery_test --trigger-event google.storage.object.finalize`
 
 In response to the prompt `Allow unauthenticated invocations of new function [streaming]? (y/N)?`, I chose `N` and got the following message: `WARNING: Function created with limited-access IAM policy. To enable unauthorized access consider "gcloud alpha functions add-iam-policy-binding streaming --member=allUsers --role=roles/cloudfunctions.invoker"`
 
 __The function is now running.__ Check the status [here](https://console.cloud.google.com/functions/).
-
-~Manually uploaded a file to the bucket. Cloud function failed with the following error (written to the log): `UnicodeDecodeError: 'utf-8' codec can't decode byte 0xa4 in position 33: invalid start byte`. Trying to load to json locally...~
-
-```python
-import json
-finworks = '/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data/ztf_archive/1154446891615015011_new_WORKS.avro'
-fin = '/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data/ztf_archive/1154446891615015011.avro'
-with open(finworks, 'rb') as f:
-    alert_bytes = f.read()
-    # data_str = alert_bytes.decode("utf-8")
-    row = json.loads(alert_bytes)
-```
-
-~This gives exactly the same error as in the logging (above).
-This seems to be a Python problem, see [this github issue](https://github.com/fastavro/fastavro/issues/69).~
-
-NO NEED TO USE JSON... I was combining scripts from two different places. The call to json is unnecessary as the row upload to BQ happens in the command load_job = BQ.load_table_from_uri().
-
 
 
 <a name="gcloudsdk"></a>
@@ -296,7 +181,6 @@ Helpful output from the initialization:
 > * Run `gcloud topic --help` to learn about advanced features of the SDK like arg files and output formatting
 
 <!-- fe ### Installing Google Cloud SDK -->
-
 
 <!-- fe ## Writing my own cloud function -->
 
@@ -356,7 +240,7 @@ __See email from Eric Bellm. Problem seems to be that the default value (which s
 <a name="header"></a>
 # Fix schema header idiosyncrasies
 <!-- fs -->
-This fix is going in the `alert_ingestion.format_alerts` module which will be called by the `consume` module.
+~This fix is going in the `alert_ingestion.format_alerts` module which will be called by the `consume` module.~ Module `alert_ingestion.format_alerts` is unnecessary and has been deleted. Instead, generate a valid schema once (per survey/version) using Fastavro and write it to a pickle file. The fixing of individual alerts is then handled directly in `consume`.
 
 <a name="fastavro"></a>
 ## Fix using Fastavro (outside broker environment)
@@ -647,7 +531,7 @@ High level logic is the following:
 3. write a new temporary file with the alert packet data and a valid schema
 4. read that file back in to a bytes object and dump to GCS
 
-This will be integrated into the `consume` module which does items 1 and 4.
+This will be integrated into the `consume` module which already does items 1 and 4.
 
 ```python
 from tempfile import SpooledTemporaryFile
@@ -950,8 +834,10 @@ newest version(s) of fastavro don't work with nested schemas when a schema is re
 <!-- fe # USE LSST functions to correct the schema -->
 <!-- fe # Fix schema header idiosyncrasies -->
 
+
 <a name="pep8"></a>
 # Run PEP8
+<!-- fs -->
 This has been renamed to `pycodestyle`.
 
 ```bash
@@ -968,6 +854,8 @@ cd.
 cd tests
 pycodestyle test_format_alerts.py
 ```
+<!-- fe # Run PEP8 -->
+
 
 <a name="sand"></a>
 # Sand

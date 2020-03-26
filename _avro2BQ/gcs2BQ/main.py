@@ -1,61 +1,63 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 
-"""The ``gcs2BQ`` module loads Avro files from a Google Cloud Storage (GCS) bucket into a BigQuery (BQ) table.
+"""This module is intended to be deployed as a Google Cloud Function so that it
+listens to a Google Cloud Storage (GCS) bucket. When a new file is detected in
+the bucket (Avro file format expected), it will automatically load it into a
+BigQuery (BQ) table. This code borrows heavily from
+https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-avro.
 
 Usage Example
 -------------
 
-.. code-block:: python
+Deploy the ``stream_GCS_to_BQ`` function by running the following command in
+the directory where this module is located. For more information, see
+https://cloud.google.com/functions/docs/calling/storage.
+
+.. code-block:: bash
    :linenos:
 
+   gcloud functions deploy stream_GCS_to_BQ --runtime python37 --trigger-resource <YOUR_TRIGGER_BUCKET_NAME> --trigger-event google.storage.object.finalize
+
+Module Documentation
+--------------------
 """
 
+import logging
 import os
-import json
 from google.cloud import bigquery
-from google.cloud import storage
 
+log = logging.getLogger(__name__)
 
 PROJECT_ID = os.getenv('GCP_PROJECT')
 BQ_DATASET = 'GCS_Avro_to_BigQuery_test'
 BQ_TABLE = 'streaming_test1'
-CS = storage.Client()
+BQ_TABLE_ID = '.'.join([PROJECT_ID, BQ_DATASET, BQ_TABLE])
 BQ = bigquery.Client()
 
 
-def streaming(data, context):
-    '''This function is executed whenever a file is added to Cloud Storage'''
+def stream_GCS_to_BQ(data, context):
+    """This function is executed whenever a file is added to Cloud Storage.
+    Most of this function is taken from
+    https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-avro
+    """
+
+    # Create the job
     bucket_name = data['bucket']
     file_name = data['name']
-
-    # from https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-avro
-    table_ref = BQ.dataset(BQ_DATASET).table(BQ_TABLE)
     job_config = bigquery.LoadJobConfig()
     job_config.write_disposition = bigquery.WriteDisposition.WRITE_APPEND
     job_config.source_format = bigquery.SourceFormat.AVRO
     uri = f"gs://{bucket_name}/{file_name}"
-    load_job = BQ.load_table_from_uri(
-        uri, table_ref, job_config=job_config
-    )  # API request
-    print("Starting job {}".format(load_job.job_id))
+    # API request
+    load_job = BQ.load_table_from_uri(uri, BQ_TABLE_ID, job_config=job_config)
+    msg = (f'Starting stream_GCS_to_BQ job {load_job.job_id} | '
+           f'file name: {file_name} | '
+           f'GCS Bucket: {bucket_name} | '
+           f'BQ Table ID: {BQ_TABLE_ID}'
+           )
+    log.info(msg)
 
-    load_job.result()  # Waits for table load to complete.
-
-    destination_table = BQ.get_table(table_ref)
-    print("Loaded {} rows.".format(destination_table.num_rows))
-
-    # _insert_into_bigquery(bucket_name, file_name)
-
-
-
-def _insert_into_bigquery(bucket_name, file_name):
-    blob = CS.get_bucket(bucket_name).blob(file_name)
-    row = json.loads(blob.download_as_string())
-    table = BQ.dataset(BQ_DATASET).table(BQ_TABLE)
-    errors = BQ.insert_rows_json(table,
-                                 json_rows=[row],
-                                 row_ids=[file_name],
-                                 retry=retry.Retry(deadline=30))
-    if errors != []:
-        raise BigQueryError(errors)
+    # Run the job
+    load_job.result()  # Start job, wait for it to complete, get the result
+    #
