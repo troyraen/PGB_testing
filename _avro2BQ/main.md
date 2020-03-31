@@ -4,9 +4,10 @@
 - [Python function](#Python)
     - [Create module](#create_gcs2BQ)
     - [Test module](#test_gcs2BQ)
+    - [Unit test](#unittest)
     - [Install Google Cloud SDK](#gcloudsdk)
 - [Create BigQuery Table via file upload (GUI)](#BQupload)
-    - Schema headers in the ZTF version 3.3 Avro files do not meet BQ's strict compliance requirements. BQ cannot create (or append to) the table using the original files.
+    - Schema headers in the ZTF version 3.3 Avro files do not meet BQ's strict compliance requirements. BQ cannot create (or append to) the table using the original files. The schema in the header must be fixed first.
 - [Fix schema header](#header)
     - [use Fastavro to fix the schema and write a new file](#fastavro)
     - [Replace the schema in the `alert_bytes` object directly](#replace_bytes)
@@ -14,6 +15,8 @@
     - [Generate the schema from multiple files (based on LSST code)](#lsst)
 - [Run PEP8](#pep8)
 - [Sandbox](#sand)
+
+__The code resulting from this markdown file is split between the `tjraen/alert_formatting` and `tjraen/gcs2bq` branches of the `mwvgroup/Pitt-Google-Broker` repo.__
 
 
 <a name="Java"></a>
@@ -119,6 +122,7 @@ __Questions__
 
 <a name="test_gcs2BQ"></a>
 ### Testing the `gcs2BQ` module
+<!-- fs -->
 
 - The module must be named `main.py`.
 - See below to install the gcloud SDK.
@@ -133,6 +137,28 @@ __Deploy the module:__
 In response to the prompt `Allow unauthenticated invocations of new function [streaming]? (y/N)?`, I chose `N` and got the following message: `WARNING: Function created with limited-access IAM policy. To enable unauthorized access consider "gcloud alpha functions add-iam-policy-binding streaming --member=allUsers --role=roles/cloudfunctions.invoker"`
 
 __The function is now running.__ Check the status [here](https://console.cloud.google.com/functions/).
+<!-- fe ### Testing the `gcs2BQ` module -->
+
+
+<a name="unittest"></a>
+### Running the unit test for the `gcs2BQ` module
+<!-- fs -->
+```python
+from tests import test_gcs_to_bq as gb
+g = gb.GCS2BQ_upload() # instantiate the test class
+g.test_upload_GCS_to_BQ() # run the test
+
+
+from broker.alert_ingestion.GCS_to_BQ import main
+data = {
+                'bucket': 'ardent-cycling-243415_testing_bucket',
+                'name': 'ztf_3.3_validschema_1154446891615015011.avro'
+        }
+context = {}
+job_errors = main.stream_GCS_to_BQ(data, context)
+```
+
+<!-- fe ### Running the unit test for the `gcs2BQ` module -->
 
 
 <a name="gcloudsdk"></a>
@@ -848,11 +874,15 @@ pip install pycodestyle
 cd broker/alert_ingestion
 pycodestyle consume.py
 pycodestyle gen_valid_schema.py
+cd GCS_to_BQ
+pycodestyle main.py
 
 cd.
 cd.
 cd tests
 pycodestyle test_format_alerts.py
+pycodestyle test_gcs_to_bq.py
+
 ```
 <!-- fe # Run PEP8 -->
 
