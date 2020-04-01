@@ -1,9 +1,10 @@
 # Set up Google Cloud Function to grab Avro files from GCS bucket and import to BigQuery
 
 __Not yet done:__
-- [ ]  check for duplicates in BQ tables.
-    - PS has an "at _least_ once" delivery. Only way to check if the data is already in the table prior to uploading is to query the database which could be very expensive. It is recommended to insert duplicates and handle their removal later. See [this post](https://stackoverflow.com/questions/39853782/check-if-data-already-exists-before-inserting-into-bigquery-table-using-python).
 - [ ]  unittest: test that datasets, buckets, PS topics, etc. needed by the cloud function exist and have appropriate permissions
+- [ ]  Fix and test guess schema survey and version functions
+- [ ]  Check for duplicates in BQ tables.
+    - PS has an "at _least_ once" delivery. Only way to check if the data is already in the table prior to uploading is to query the database which could be very expensive. It is recommended to insert duplicates and handle their removal later. See [this post](https://stackoverflow.com/questions/39853782/check-if-data-already-exists-before-inserting-into-bigquery-table-using-python).
 
 
 - [Java package](#Java)
