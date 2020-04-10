@@ -11,13 +11,13 @@
 
 Remove Conda environment:
 ```bash
-conda remove --name pgbtest --all
+conda remove --name PGB --all
 ```
 
 Install:
 ```bash
-conda create -n pgbtest python=3.7
-conda activate pgbtest  # Activate the new environment
+conda create -n PGB python=3.7
+conda activate PGB  # Activate the new environment
 python setup.py install --user  # Install the package
 
 OGdir=$(pwd)
@@ -30,11 +30,11 @@ touch ./etc/conda/activate.d/env_vars.sh
 touch ./etc/conda/deactivate.d/env_vars.sh
 
 # Add environmental variables
-echo 'export BROKER_PROJ_ID="ardent-cycling-243415"' >> ./etc/conda/activate.d/env_vars.sh
-echo 'export GOOGLE_APPLICATION_CREDENTIALS="/home/tjr63/Documents/Pitt-Broker/GCPauth_pitt-google-broker-prototype-0679b75dded0.json"' >> ./etc/conda/activate.d/env_vars.sh
-echo 'export PGB_DATA_DIR="/Users/troyraen/Documents/PGB/repo/broker/ztf_archive/data"' >> ./etc/conda/activate.d/env_vars.sh
+echo 'export GOOGLE_CLOUD_PROJECT="ardent-cycling-243415"' >> ./etc/conda/activate.d/env_vars.sh
+echo 'export GOOGLE_APPLICATION_CREDENTIALS="/home/tjr63/PGB/repo/GCPauth_pitt-google-broker-prototype-0679b75dded0.json"' >> ./etc/conda/activate.d/env_vars.sh
+echo 'export PGB_DATA_DIR="/home/tjr63/PGB/repo/broker/ztf_archive/data"' >> ./etc/conda/activate.d/env_vars.sh
 
-echo 'unset BROKER_PROJ_ID' >> ./etc/conda/deactivate.d/env_vars.sh
+echo 'unset GOOGLE_CLOUD_PROJECT' >> ./etc/conda/deactivate.d/env_vars.sh
 echo 'unset GOOGLE_APPLICATION_CREDENTIALS' >> ./etc/conda/deactivate.d/env_vars.sh
 echo 'unset PGB_DATA_DIR' >> ./etc/conda/deactivate.d/env_vars.sh
 
