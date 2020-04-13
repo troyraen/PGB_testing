@@ -1,8 +1,10 @@
 # Set up Google Cloud Function to grab Avro files from GCS bucket and import to BigQuery
 
+
 __Not yet done:__
-- [ ]  unittest: test that datasets, buckets, PS topics, etc. needed by the cloud function exist and have appropriate permissions
+- [x]  Travis needs GCP authentication configured (Daniel is doing this)
 - [ ]  Fix and test guess schema survey and version functions
+- [ ]  unittest: test that datasets, buckets, PS topics, etc. needed by the cloud function exist and have appropriate permissions.
 - [ ]  Check for duplicates in BQ tables.
     - PS has an "at _least_ once" delivery. Only way to check if the data is already in the table prior to uploading is to query the database which could be very expensive. It is recommended to insert duplicates and handle their removal later. See [this post](https://stackoverflow.com/questions/39853782/check-if-data-already-exists-before-inserting-into-bigquery-table-using-python).
 
@@ -20,10 +22,12 @@ __Not yet done:__
     - [Replace the schema in the `alert_bytes` object directly](#replace_bytes)
     - [Write `alert_bytes` to temporary file and use Fastavro to replace the schema](#tempfile)
     - [Generate the schema from multiple files (based on LSST code)](#lsst)
+- [Fix `test_pub_sub_client.py` now that Travis has cloud access](#ps)
+- [Setup required GCP resources](#gcpsetup) 
 - [Run PEP8](#pep8)
 - [Sandbox](#sand)
 
-__The code resulting from this markdown file is split between the `tjraen/alert_formatting` and `tjraen/gcs2bq` branches of the `mwvgroup/Pitt-Google-Broker` repo.__
+__The code resulting from this markdown file is split between the `tjraen/alert_formatting` and `tjraen/gcs2bq` branches of the `mwvgroup/Pitt-Google-Broker` repo. The file [repo_testing/tjraen_alert_formatting.md](repo_testing/tjraen_alert_formatting.md) contains additional code use to create/test that branch.__
 
 
 <a name="Java"></a>
@@ -866,6 +870,82 @@ newest version(s) of fastavro don't work with nested schemas when a schema is re
 
 <!-- fe # USE LSST functions to correct the schema -->
 <!-- fe # Fix schema header idiosyncrasies -->
+
+
+<a name="ps"></a>
+# Fix `test_pub_sub_client.py` now that Travis has cloud access
+<!-- fs -->
+```python
+from broker import pub_sub_client as psc
+from pathlib import Path
+from google.cloud import pubsub
+from broker.alert_ingestion.gen_valid_schema import _load_Avro
+
+PROJECT_ID = os.getenv('GOOGLE_CLOUD_PROJECT')
+
+# create topic and subscription (gcp_setup.py)
+topic_name = 'test_alerts_PS_publish'
+subscription_name = 'test_alerts_PS_subscribe'
+publisher = pubsub.PublisherClient()
+subscriber = pubsub.SubscriberClient()
+topic_path = subscriber.topic_path(PROJECT_ID, topic_name)
+sub_path = subscriber.subscription_path(PROJECT_ID, subscription_name)
+publisher.create_topic(topic_path)
+subscriber.get_subscription(sub_path)
+subscriber.create_subscription(sub_path, topic_path)
+
+# write test_pub_sub_client.py
+test_alerts_dir = Path('tests/test_alerts')
+test_alert_path = test_alerts_dir / 'ztf_3.3_1154308030015010004.avro'
+sample_alert_schema, sample_alert_data = _load_Avro(str(test_alert_path))
+
+psc.message_service.publish_alerts(PROJECT_ID, topic_name, sample_alert_data)
+message = psc.message_service.subscribe_alerts(PROJECT_ID, subscription_name, max_alerts=1)
+
+# test test_pub_sub_client.py
+from tests import test_pub_sub_client as tpsc
+psclass = tpsc.TestPubSub()
+psclass.test_input_match_output()
+# Works!
+```
+<!-- fe # Fix `test_pub_sub_client.py` now that Travis has cloud access -->
+
+
+<a name="gcpsetup"></a>
+# Setup required GCP resources
+<!-- fs -->
+```python
+#
+storage_client = storage.Client()
+bucket_name = f'{PROJECT_ID}_testing_bucket'
+bucket = storage_client.get_bucket(bucket_name)
+filename = 'ztf_3.3_validschema_1154446891615015011.avro'
+filename = 'aaa111.avro'
+blob = bucket.blob(filename)
+# inpath = Path(__file__).resolve().parent / filename
+inpath = Path('tests/test_alerts') / filename
+with inpath.open('rb') as infile:
+    blob.upload_from_file(infile)
+
+# test the module
+from broker import gcp_setup as gs
+gs.setup_buckets()
+# this works!
+
+# test_GCS_to_BQ.py to make sure I didn't break anything
+from tests import test_gcs_to_bq as tgb
+gcsclass = tgb.GCS2BQ_upload()
+gcsclass.test_upload_GCS_to_BQ()
+# this works!
+
+# test_format_alerts.py, changed the dataset, make sure didn't break anything
+from tests import test_format_alerts as tfa
+faclass = tfa.AlertFormattedForBigQuery()
+faclass.setUpClass()
+faclass.test_BQupload_ztf_3_3()
+# this works!
+```
+<!-- fe # Setup required GCP resources -->
 
 
 <a name="pep8"></a>
