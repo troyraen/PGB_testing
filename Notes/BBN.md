@@ -8,7 +8,7 @@
 
 [What is the EM Algorithm?](https://www.statisticshowto.datasciencecentral.com/em-algorithm-expectation-maximization/)
     - The Expectation-Maximization (EM) algorithm is a way to _find maximum-likelihood estimates for model parameters when your data is incomplete, has missing data points, or has unobserved (hidden) latent variables. It is an iterative way to approximate the maximum likelihood function_.
-    - The EM algorithm can very very slow, even on the fastest computer. It works best when you only have a small percentage of missing data and the dimensionality of the data isn’t too big. The higher the dimensionality, the slower the E-step; for data with larger dimensionaloty, you may find the E-step runs extremely slow as the procedure approaches a local maximum.
+    - The EM algorithm can very very slow, even on the fastest computer. It works best when you only have a small percentage of missing data and the dimensionality of the data isn’t too big. The higher the dimensionality, the slower the E-step; for data with larger dimensionality, you may find the E-step runs extremely slow as the procedure approaches a local maximum.
 
 [What is the difference between a Bayesian network and an artificial neural network?](https://www.quora.com/What-is-the-difference-between-a-Bayesian-network-and-an-artificial-neural-network)
     Similarities

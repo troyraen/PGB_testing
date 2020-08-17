@@ -3,8 +3,8 @@
 
 __Not yet done:__
 - [x]  Travis needs GCP authentication configured (Daniel is doing this)
-- [ ]  Fix and test guess schema survey and version functions
-- [ ]  unittest: test that datasets, buckets, PS topics, etc. needed by the cloud function exist and have appropriate permissions.
+- [x]  Fix and test guess schema survey and version functions
+- [ ]  unittest that datasets, buckets, PS topics, etc. needed by the cloud function (etc.) exist and have appropriate permissions.
 - [ ]  Check for duplicates in BQ tables.
     - PS has an "at _least_ once" delivery. Only way to check if the data is already in the table prior to uploading is to query the database which could be very expensive. It is recommended to insert duplicates and handle their removal later. See [this post](https://stackoverflow.com/questions/39853782/check-if-data-already-exists-before-inserting-into-bigquery-table-using-python).
 
@@ -23,7 +23,7 @@ __Not yet done:__
     - [Write `alert_bytes` to temporary file and use Fastavro to replace the schema](#tempfile)
     - [Generate the schema from multiple files (based on LSST code)](#lsst)
 - [Fix `test_pub_sub_client.py` now that Travis has cloud access](#ps)
-- [Setup required GCP resources](#gcpsetup) 
+- [Setup required GCP resources](#gcpsetup)
 - [Run PEP8](#pep8)
 - [Sandbox](#sand)
 
