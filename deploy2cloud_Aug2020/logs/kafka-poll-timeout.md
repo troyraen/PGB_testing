@@ -81,6 +81,7 @@ continue
 
 # terminal output
 ```bash
+# c.subscribe(['ztf_20201031_programid1']) produces:
 %7|1604454996.048|INIT|rdkafka#consumer-1| [thrd:app]: librdkafka v1.5.0 (0x10500ff) rd
 kafka#consumer-1 initialized (builtin.features gzip,snappy,ssl,sasl,regex,lz4,sasl_gssa
 pi,sasl_plain,sasl_scram,plugins,sasl_oauthbearer, CC CXX OSXLD LIBDL PLUGINS ZLIB SSL
@@ -115,7 +116,8 @@ r/0: ApiArrayCnt -1 out of range
 /0: GSSAPI client step 1
 %5|1604454997.875|LIBSASL|rdkafka#consumer-1| [thrd:GroupCoordinator]: GroupCoordinator
 /0: GSSAPI client step 2
-# ...
+# try statement produces:
+# ... repeated, similar messages; here are the last ones before I restarted the kernel
 %7|1604453408.556|FETCH|rdkafka#consumer-1| [thrd:sasl_plaintext://public2.alerts.ztf.u
 w.edu:9094/bootstrap]: sasl_plaintext://public2.alerts.ztf.uw.edu:9094/0: Fetch topic z
 tf_20201031_programid1 [8] at offset 13187 (v2)
