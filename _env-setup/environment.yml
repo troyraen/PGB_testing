@@ -1,0 +1,26 @@
+# this should be placed in the pgb repo root dir next to requirements.txt
+name: pgb2
+
+channels:
+    - stuarteberg
+    - conda-forge
+    # - anaconda # for ipython
+    - defaults
+
+dependencies:
+    - python=3.7
+    - kafka-python
+    - python-confluent-kafka
+    - librdkafka=1.0.1=hf484d3e_1
+    - ipython # not necessary for broker
+    # - pip
+    # - pip:
+        # - -r file:requirements.txt --upgrade-strategy only-if-needed
+
+# variables:
+#     # PATH: "/root/miniconda3/bin:${PATH}"
+#     PYTHONPATH: "Pitt-Google-Broker/:${PYTHONPATH}"
+#     GOOGLE_CLOUD_PROJECT: "ardent-cycling-243415"
+#     ztf_server: "public2.alerts.ztf.uw.edu:9094"
+#     ztf_principle: "pitt-reader@KAFKA.SECURE"
+#     ztf_keytab_path: "pitt-reader.user.keytab"
