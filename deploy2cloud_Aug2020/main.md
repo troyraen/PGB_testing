@@ -1,7 +1,7 @@
 # Cleanup To do list
 - [ ]  do something with LSST test alerts
 - [ ]  install kafka directly (without conda)
-    - [ ]  alternately, consider using [PyKafka](https://pykafka.readthedocs.io/en/latest/index.html) (recommended by Rubin for their stream)
+    - [-]  alternately, consider [using PyKafka](#pykafka) (recommended by Rubin for their stream)... Will not work because does not have SASL support
 - [ ]  [set env variables from file](https://cloud.google.com/compute/docs/containers/configuring-options-to-run-containers#setting_environment_variables)
 - [x]  clean up this file
 - [ ]  WARNING: The Node.js 8 runtime is deprecated on Cloud Functions. Please migrate to Node.js 10 (--runtime=nodejs10). See https://cloud.google.com/functions/docs/migrating/nodejs-runtimes
@@ -24,7 +24,8 @@
 - [x]  `msg = self.consume(num_messages=1, timeout=5)[0]` `"IndexError: list index out of range`. Solution: ZTF reset Kafka ofsets + we now use `self.poll()` instead of `self.consume()`
     - [Test whether can connect to Kafka stream using code from notebooks/ztf-auth-test.ipynb](#testkafkaconnection)
 - [ ]  [broker VM instance runs once but does not restart](#startinstance)
-- [x]  Changed VM machine type to `g1-small`
+- [x]  Changed VM machine type to `g1-small` because resources were over-utilized
+- [ ]  [Consumer ingests for awhile, then just stops](#ingestionstops)
 - [ ]  `GCS_to_BQ` streaming rate limit exceeded ([quotas](https://cloud.google.com/bigquery/quotas#streaming_inserts), [table limits](https://cloud.google.com/bigquery/quotas#standard_tables))
 
 # Outline
@@ -35,6 +36,22 @@
 - [Error Logging](#logging)
 
 ---
+
+need to be able to query Antares and have them query us
+2 bq tables:
+    - one we can just do stuff with
+    - one that is complete for ~year (get all these in a bucket first - Daniel will do this)
+front end:
+    - look at other broker websites. what do i like/not like
+focus on manually running a bunch of stuff. can connect things later.
+
+By time we write proposal
+Should have set of alerts + history
+    - classifications run on them
+        - cloud fnc, query BQ, fit Salt2, push output to new BQ table
+            - make db table queryable, not editable by public
+    - way to query output and display a table (Daniel)
+Xmatch with Vizier
 
 <a name="status"></a>
 # Status check
@@ -191,8 +208,43 @@ Found that neither is supported for Container-Optimized OS, so we can't use them
 
 <!-- fe # Error Logging -->
 
+
+<a name="pykafka"></a>
+# Using PyKafka
+<!-- fs -->
+- [PyKafka](https://pykafka.readthedocs.io/en/latest/index.html)
+- Also see "Writing your own consumer" at the bottom of [Alert stream simulator](https://github.com/lsst-dm/alert-stream-simulator/)
+
+```bash
+conda clean --all
+conda create -n pgb-pykafka python=3.7 ipython
+conda activate pgb-pykafka
+pip install pykafka
+
+ipython
+```
+```python
+from pykafka import KafkaClient, SslConfig
+config = SslConfig( cafile='pitt-reader@KAFKA.SECURE',
+                    certfile='pitt-reader@KAFKA.SECURE',  # optional
+                    keyfile='./pitt-reader.user.keytab')  # optional
+client = KafkaClient(hosts="public2.alerts.ztf.uw.edu:9094", ssl_config=config)
+```
+
+This will not work because PyKafka does not provide SASL support.
+<!-- fe Using PyKafka -->
+
 ___
 # Attempts to fix various things
+
+
+<a name="ingestionstops"></a>
+### Consumer ingests for awhile, then just stops
+<!-- fs -->
+See, e.g., machine id 5597883590625052742
+[Logs from time period where ingestion stoped](https://console.cloud.google.com/logs/query;timeRange=2020-10-30T20:30:26.178Z%2F2020-10-30T20:33:26.178Z?project=ardent-cycling-243415)
+
+<!-- fe Consumer ingests for awhile, then just stops -->
 
 
 <a name="">startinstance</a>

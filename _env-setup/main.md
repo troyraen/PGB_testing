@@ -1,5 +1,38 @@
-# install kafka directly and try to run from command line
 
+# Setup Cloud Shell
+<!-- fs -->
+```bash
+# log into Cloud Shell and get latest repo version
+gcloud alpha cloud-shell ssh
+cd Pitt-Google-Broker
+git fetch
+git pull
+# authorize account
+gcloud auth login
+
+# install Miniconda
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+mkdir /root/.conda
+Miniconda3-latest-Linux-x86_64.sh
+rm -f Miniconda3-latest-Linux-x86_64.sh
+
+# create conda env
+# conda remove --name pgb --all
+conda env create -f environment.yml -n pgb
+# includes `pip install -r Pitt-Google-Broker/requirements.txt`
+conda activate pgb
+
+# copy credential files to cloudshell
+gcloud alpha cloud-shell scp localhost:/Users/troyraen/Documents/PGB/repo/krb5.conf cloudshell:~/Pitt-Google-Broker/.
+gcloud alpha cloud-shell scp localhost:/Users/troyraen/Documents/PGB/repo/pitt-reader.user.keytab cloudshell:~/Pitt-Google-Broker/.
+
+
+```
+<!-- fe Setup Cloud Shell -->
+
+
+# install kafka directly and try to run from command line
+<!-- fs -->
 Christopher says to use: `yum install confluent-kafka-2.11`
 
 on Mac, don't have apt-get or yum. probably need to install homebrew.
@@ -145,32 +178,4 @@ Caused by: java.lang.IllegalArgumentException: Could not find a 'KafkaClient' en
 
 However, Christopher Phillips (ZTF) reset the consumer offsets and the python code is now working and receiving alerts. Trying to deploy the broker again.
 
-
-# Setup Cloud Shell
-```bash
-# log into Cloud Shell and get latest repo version
-gcloud alpha cloud-shell ssh
-cd Pitt-Google-Broker
-git fetch
-git pull
-# authorize account
-gcloud auth login
-
-# install Miniconda
-wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
-mkdir /root/.conda
-Miniconda3-latest-Linux-x86_64.sh
-rm -f Miniconda3-latest-Linux-x86_64.sh
-
-# create conda env
-# conda remove --name pgb --all
-conda env create -f environment.yml -n pgb
-# includes `pip install -r Pitt-Google-Broker/requirements.txt`
-conda activate pgb
-
-# copy credential files to cloudshell
-gcloud alpha cloud-shell scp localhost:/Users/troyraen/Documents/PGB/repo/krb5.conf cloudshell:~/Pitt-Google-Broker/.
-gcloud alpha cloud-shell scp localhost:/Users/troyraen/Documents/PGB/repo/pitt-reader.user.keytab cloudshell:~/Pitt-Google-Broker/.
-
-
-```
+<!-- fe install kafka directly and try to run from command line -->
