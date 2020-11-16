@@ -25,11 +25,10 @@ import custommods.beam_helpers as bhelp
 
 # gcp resources
 PROJECTID = 'ardent-cycling-243415'
-dataflow_job_name = 'salt2-vizier'
+dataflow_job_name = 'salt2-fits'
 beam_bucket = 'ardent-cycling-243415_dataflow-test'
 input_bq_table = 'ztf_alerts.alerts'
-output_bq_table = 'dataflow_test.salt2'
-output_schema = 'mjd:FLOAT, flux:FLOAT'  # must match salt2fit() return
+output_bq_table = 'ztf_alerts.salt2'
 
 # beam options
 options = beam.options.pipeline_options.PipelineOptions()
@@ -40,7 +39,7 @@ gcloud_options.staging_location = f'gs://{beam_bucket}/staging'
 gcloud_options.temp_location = f'gs://{beam_bucket}/temp'
 worker_options = options.view_as(beam.options.pipeline_options.WorkerOptions)
 worker_options.disk_size_gb = 50
-worker_options.max_num_workers = 2
+worker_options.max_num_workers = 6
 # worker_options.num_workers = 2
 # worker_options.machine_type = 'n1-standard-8'
 options.view_as(beam.options.pipeline_options.StandardOptions).runner = 'DataflowRunner'
@@ -58,21 +57,50 @@ def modify_data1(element):
             }
 
 def salt2fit(alert):
-    epochs = alert['prv_candidates'] + [alert['candidate']]
-    epoch_dict = bhelp.extract_epochs(epochs)
+    """ Performs a Salt2 fit on alert history.
 
-    return {'mjd': epoch_dict['mjd'],
-            'flux': epoch_dict['flux']
+    Args:
+        alert (dict): dictionary of alert data from ZTF
+
+    Returns:
+        salt2_fit (dict): output of Salt2 fit, formatted for upload to BQ
+    """
+    import sncosmo
+    import custommods.beam_helpers as bhelp
+
+    # extract epochs from alert
+    epoch_dict = bhelp.extract_epochs(alert)
+    # format epoch data for salt2
+    epoch_tbl = bhelp.format_for_salt2(epoch_dict)
+
+    # fit with salt2
+    model = sncosmo.Model(source='salt2')
+    result, fitted_model = sncosmo.fit_lc(epoch_tbl, model,
+                            ['z', 't0', 'x0', 'x1', 'c'],  # parameters of model to vary
+                            bounds={'z':(0.01, 0.2)},  # https://arxiv.org/pdf/2009.01242.pdf
+    )
+
+    # collect results
+    param_dict = {result.param_names[i]: result.parameters[i] for i in range(len(result.param_names))}
+    return {'candid': alert['candid'],
+            'chisq': result.chisq,
+            'ndof': result.ndof,
+            **param_dict
             }
+    # return {'candid': alert['candid'],
+    #         'chisq': 0.0,
+    #         }
+output_schema = 'candid:INTEGER, chisq:FLOAT, ndof:INTEGER, z:FLOAT, t0:FLOAT, x0:FLOAT, x1:FLOAT, c:FLOAT'  # must match salt2fit() return
 
 p4 = beam.Pipeline(options=options)
 
-query = f'SELECT * FROM {PROJECTID}.{input_bq_table} LIMIT 10'
+query = f'SELECT * FROM {PROJECTID}.{input_bq_table}'
 
-(p4 | 'read' >> beam.io.Read(beam.io.ReadFromBigQuery(project=PROJECTID,
+(p4 | 'Read alert BQ' >> beam.io.Read(beam.io.ReadFromBigQuery(project=PROJECTID,
         use_standard_sql=True, query=query))
-    | 'modify' >> beam.Map(salt2fit)
-    | 'write' >> beam.io.Write(beam.io.WriteToBigQuery(output_bq_table,
+    | 'Filter exgal trans' >> beam.Filter(bhelp.is_transient)
+    | 'Salt2 fit' >> beam.Map(salt2fit)
+    | 'Write to BQ' >> beam.io.Write(beam.io.WriteToBigQuery(output_bq_table,
         schema=output_schema,
         create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED,
         write_disposition=beam.io.BigQueryDisposition.WRITE_TRUNCATE))
