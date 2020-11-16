@@ -1,4 +1,9 @@
+# Anchors
+- [Setup Cloud Shell](#cloudshell)
+- [install kafka directly and try to run from command line](#cmdkafka)
 
+
+<a name="cloudshell"></a>
 # Setup Cloud Shell
 <!-- fs -->
 ```bash
@@ -31,6 +36,7 @@ gcloud alpha cloud-shell scp localhost:/Users/troyraen/Documents/PGB/repo/pitt-r
 <!-- fe Setup Cloud Shell -->
 
 
+<a name="cmdkafka"></a>
 # install kafka directly and try to run from command line
 <!-- fs -->
 Christopher says to use: `yum install confluent-kafka-2.11`

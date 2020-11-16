@@ -1,4 +1,5 @@
-[dataflow console](https://console.cloud.google.com/dataflow/jobs?project=ardent-cycling-243415)
+- [dataflow console](https://console.cloud.google.com/dataflow/jobs?project=ardent-cycling-243415)
+- [Managing Python Pipeline Dependencies](https://beam.apache.org/documentation/sdks/python-pipeline-dependencies/#multiple-file-dependencies) 
 
 
 # Setup (install Beam, create resources)

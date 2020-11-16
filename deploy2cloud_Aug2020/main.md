@@ -1,3 +1,5 @@
+- [Monitoring dashboard](https://console.cloud.google.com/monitoring?project=ardent-cycling-243415&timeDomain=1d)
+
 # Outline
 - [Pre-meeting To do list](#pretodo)
 - [Fixing issues](#fix)
@@ -7,9 +9,11 @@
 - [Deploying the Broker](#deploybroker)
 - [Helpful GCP tasks](#gcptasks)
     - [Error Logging](#logging)
-    - [Download an alert from GCS bucket](#dld-from-gcs)
+    - [View VM logs](#viewlogs)
+    - [Manually stop, delete instance](#stopvm)
     - [Manual load GCS -> BQ](#manualGCS2BQ)
-    - [Manually trigger compute instance](#triggervm)
+    - [Download an alert from GCS bucket](#dld-from-gcs)
+    - [Manually trigger startInstancePubSub](#triggervm)
 
 <a name="pretodo"></a>
 # Pre-meeting To do list
@@ -44,6 +48,9 @@
 - [ ]  add GCS2BQ cloud fnc deployment to scheduleinstance.py
 - [ ]  change Dockerfile to use master branch
 - [ ]  fix publish_pubsub import to GCS2BQ cloud fnc (right now I've just copied the relevant function into the module.)
+- [ ]  switch to Dataflow job
+    - [ReadFromKafka](https://beam.apache.org/releases/pydoc/2.13.0/apache_beam.io.external.kafka.html#apache_beam.io.external.kafka.ReadFromKafka)
+    - [example](https://github.com/apache/beam/blob/master/sdks/python/apache_beam/examples/kafkataxi/kafka_taxi.py)
 
 ---
 # Nov 5th meeting:
@@ -123,11 +130,11 @@ docker build -t consume_ztf_today -f /home/troy_raen_pitt/Pitt-Google-Broker/doc
 # tag the image
 git log -1 --format=format:"%H" # get git commit hash to use for the TAG
 # docker tag [SOURCE_IMAGE] [HOSTNAME]/[PROJECT-ID]/[IMAGE]:[TAG]
-docker tag consume_ztf_today gcr.io/ardent-cycling-243415/consume_ztf_today:tag1113b
+docker tag consume_ztf_today gcr.io/ardent-cycling-243415/consume_ztf_today:tag1116a
 # docker tag consume_ztf gcr.io/ardent-cycling-243415/consume_ztf:b0bf99587db1ce3f02ace762b087503d1d48db71c
 
 # push the image
-docker push gcr.io/ardent-cycling-243415/consume_ztf_today:tag1113b
+docker push gcr.io/ardent-cycling-243415/consume_ztf_today:tag1116a
 # docker push gcr.io/ardent-cycling-243415/consume_ztf:b0bf99587db1ce3f02ace762b087503d1d48db71c
 ```
 
@@ -236,31 +243,27 @@ Found that neither is supported for Container-Optimized OS, so we can't use them
 
 <!-- fe # Error Logging -->
 
-<a name="dld-from-gcs"></a>
-## Download an alert from GCS bucket
+<a name="viewlogs"></a>
+## View VM logs
 <!-- fs -->
-Following instructions [here](https://medium.com/@sandeepsinh/multiple-file-download-form-google-cloud-storage-using-python-and-gcs-api-1dbcab23c44)
-
-```python
-import logging
-import os
-from google.cloud import storage
-
-bucket_name = 'ardent-cycling-243415_ztf_alert_avro_bucket'
-fname_prefix = '1605062619785'  # recently ingested avro file name, get from logging
-local_dir = './testdownload'
-delimiter = '/'
-
-storage_client = storage.Client.from_service_account_json('GCPauth_pitt-google-broker-prototype-0679b75dded0.json')
-bucket = storage_client.get_bucket(bucket_name)
-blobs = bucket.list_blobs(prefix=fname_prefix, delimiter=delimiter) #List all objects that satisfy the filter.
-# Download the file to a destination
-# Iterating through for loop one by one using API call
-for blob in blobs:
-    destination_uri = '{}/{}'.format(local_dir, blob.name)
-    blob.download_to_filename(destination_uri)
+```bash
+gcloud compute instances describe consume-ztf-nov15 --zone us-central1-a
+# copy instance id
+gcloud logging read "resource.type=gce_instance AND resource.labels.instance_id=3541645371775973317" --limit 10 --format json
 ```
-<!-- fe Download an alert from GCS bucket -->
+
+<!-- fe View VM logs -->
+
+<a name="stopvm"></a>
+## Manually stop, delete instance
+<!-- fs -->
+```bash
+gcloud compute instances list
+gcloud compute instances stop consume-ztf-nov12 --zone us-central1-a
+gcloud compute instances delete consume-ztf-nov12 consume-ztf-today --zone us-central1-a
+```
+
+<!-- fe ## Manually stop, delete instance -->
 
 <a name="manualGCS2BQ"></a>
 ## Manual load GCS -> BQ
@@ -294,8 +297,34 @@ g2b.GCS2BQ(file_name)
 
 <!-- fe Manual load GCS -> BQ -->
 
+<a name="dld-from-gcs"></a>
+## Download an alert from GCS bucket
+<!-- fs -->
+Following instructions [here](https://medium.com/@sandeepsinh/multiple-file-download-form-google-cloud-storage-using-python-and-gcs-api-1dbcab23c44)
+
+```python
+import logging
+import os
+from google.cloud import storage
+
+bucket_name = 'ardent-cycling-243415_ztf_alert_avro_bucket'
+fname_prefix = '1605062619785'  # recently ingested avro file name, get from logging
+local_dir = './testdownload'
+delimiter = '/'
+
+storage_client = storage.Client.from_service_account_json('GCPauth_pitt-google-broker-prototype-0679b75dded0.json')
+bucket = storage_client.get_bucket(bucket_name)
+blobs = bucket.list_blobs(prefix=fname_prefix, delimiter=delimiter) #List all objects that satisfy the filter.
+# Download the file to a destination
+# Iterating through for loop one by one using API call
+for blob in blobs:
+    destination_uri = '{}/{}'.format(local_dir, blob.name)
+    blob.download_to_filename(destination_uri)
+```
+<!-- fe Download an alert from GCS bucket -->
+
 <a name="triggervm"></a>
-## Manually trigger compute instance
+## Manually trigger startInstancePubSub
 <!-- fs -->
 I was able to manually trigger the cloud function startInstancePubSub with `gcloud functions call startInstancePubSub --data '{"data":"${data}"}'`. The logs say that the function executed successfully, and that the compute instance started, but nothing further happens. There are no errors in the logs, but none of the resources get set up and the VM doesn’t appear to actually be doing anything. Still looking…
 
