@@ -1,5 +1,6 @@
 # manually load files from GCS into BQ by filename
 
+import sys
 from google.cloud import logging
 from google.cloud import bigquery
 
@@ -36,3 +37,6 @@ def GCS2BQ(file_name):
             )
     logger.log_text(msg, severity='NOTICE')
     print(msg)
+
+# run the function
+GCS2BQ(sys.argv[1])
