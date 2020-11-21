@@ -1,5 +1,5 @@
 - [dataflow console](https://console.cloud.google.com/dataflow/jobs?project=ardent-cycling-243415)
-- [Managing Python Pipeline Dependencies](https://beam.apache.org/documentation/sdks/python-pipeline-dependencies/#multiple-file-dependencies) 
+- [Managing Python Pipeline Dependencies](https://beam.apache.org/documentation/sdks/python-pipeline-dependencies/#multiple-file-dependencies)
 
 
 # Setup (install Beam, create resources)
@@ -55,7 +55,3 @@ python -m wordcount --input gs://dataflow-samples/shakespeare/kinglear.txt \
 ```python
 python -m uppercase --region us-central1
 ```
-
-# Track dataflow job
-
-[dataflow console](https://console.cloud.google.com/dataflow/jobs?project=ardent-cycling-243415)

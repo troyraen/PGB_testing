@@ -1,10 +1,11 @@
 - [dataflow console](https://console.cloud.google.com/dataflow/jobs?project=ardent-cycling-243415)
-- [salt2-fits dashboard](https://console.cloud.google.com/monitoring/dashboards/resourceDetail/dataflow_job,project_id:ardent-cycling-243415,region:us-central1,job_name:salt2-fits?project=ardent-cycling-243415&timeDomain=1d) 
+- [salt2-fits dashboard](https://console.cloud.google.com/monitoring/dashboards/resourceDetail/dataflow_job,project_id:ardent-cycling-243415,region:us-central1,job_name:salt2-fits?project=ardent-cycling-243415&timeDomain=1d)
 
 # Outline
 - [Run beam pipeline](#runbeam)
 - [Filter for extragalactic transients](#filtertrans)
 - [Salt2 setup and fit example data](#salt2setup)
+- [Test with some BQ data](#testwithbq)
 
 # To Do
 - [ ]  create buckets in `gcp_setup.py`
@@ -13,10 +14,11 @@
 # Run beam pipeline
 <!-- fs -->
 ```bash
+gcloud auth login
 cd PGB_testing/_Salt2-Vizier
 pgbenv
 
-python -m salt2_vizier_beam \
+python -m salt2_beam \
             --region us-central1 \
             --setup_file /home/troy_raen_pitt/PGB_testing/_Salt2-Vizier/setup.py
 ```
@@ -68,9 +70,12 @@ print("The result contains the following attributes:\n", result.keys())
 
 sncosmo.plot_lc(data, model=fitted_model, errors=result.errors, fname='figs/fit.png')
 ```
+<!-- fe Salt2 setup and fit data -->
 
-## test with some BQ data
 
+<a name="testwithbq"></a>
+# Test with some BQ data
+<!-- fs -->
 ```python
 from google.cloud import bigquery
 import sncosmo
@@ -91,8 +96,7 @@ for row in query_job:
 # extract epoch info
 epoch_dictlst = []
 for alert in alertlst:
-    epochs = alert['prv_candidates'] + [alert['candidate']]
-    epoch_dictlst.append(bhelp.extract_epochs(epochs))
+    epoch_dictlst.append(bhelp.extract_epochs(alert))
 # get one dict with at least 10 epochs
 for epoch_dict in epoch_dictlst:
     if len(epoch_dict['mjd']) > 10:
@@ -108,12 +112,48 @@ result, fitted_model = sncosmo.fit_lc(
     ['z', 't0', 'x0', 'x1', 'c'],  # parameters of model to vary
     bounds={'z':(0.01, 0.2)},  # https://arxiv.org/pdf/2009.01242.pdf
     )
-
+result['cov_names'] = result['vparam_names']  # cov_names depreciated in favor of vparam_names, but flatten_result() requires it
+flatres = sncosmo.flatten_result(result)
 # plot results
 sncosmo.plot_lc(epoch_tbl, model=fitted_model, errors=result.errors, fname='figs/fitbq.png')
-```
 
-<!-- fe Salt2 setup and fit data -->
+# find a DataQualityError
+from sncosmo.fitting import DataQualityError
+for epoch_dict in epoch_dictlst:
+    epoch_tbl = bhelp.format_for_salt2(epoch_dict)
+    try:
+        result, fitted_model = sncosmo.fit_lc(
+            epoch_tbl, model,
+            ['z', 't0', 'x0', 'x1', 'c'],  # parameters of model to vary
+            bounds={'z':(0.01, 0.2)},  # https://arxiv.org/pdf/2009.01242.pdf
+            )
+    except DataQualityError as e:
+        dqe = e
+        break
+
+# save lc to temp file and upload to bucket
+from tempfile import NamedTemporaryFile, SpooledTemporaryFile
+from google.cloud import storage
+storage_client = storage.Client()
+beam_bucket = 'ardent-cycling-243415_dataflow-test'
+bucket = storage_client.get_bucket(beam_bucket)
+
+candid = 'fake-candid'
+with NamedTemporaryFile(mode='w') as temp_file:
+    sncosmo.plot_lc(epoch_tbl, model=fitted_model, errors=result.errors, fname=temp_file.name)
+    temp_file.seek(0)
+    gcs_filename = f'{candid}.png'
+    blob = bucket.blob(f'sncosmo/plot_lc/{gcs_filename}')
+    blob.upload_from_filename(filename=temp_file.name)
+
+# not working. try
+# https://beam.apache.org/releases/pydoc/2.25.0/apache_beam.io.localfilesystem.html
+# blob example usage
+# https://googleapis.dev/python/storage/latest/index.html?highlight=upload_from_filename
+# stackoverflow
+# https://stackoverflow.com/questions/54223769/writing-figure-to-google-cloud-storage-instead-of-local-drive
+```
+<!-- fe Test with some BQ data -->
 
 
 # Xmatch with Vizier and store in BQ
