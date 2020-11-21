@@ -1,4 +1,40 @@
-- [Monitoring dashboard](https://console.cloud.google.com/monitoring?project=ardent-cycling-243415&timeDomain=1d)
+- [Dashboard `consume-ztf`](https://console.cloud.google.com/monitoring/dashboards/builder/3a371dcb-42d1-4ea0-add8-141d025924f6?project=ardent-cycling-243415&dashboardBuilderState=%257B%2522editModeEnabled%2522:false%257D&timeDomain=1h)
+- [VM Instances](https://console.cloud.google.com/compute/instances?project=ardent-cycling-243415&instancessize=50)
+- [Monitoring dashboard (project)](https://console.cloud.google.com/monitoring?project=ardent-cycling-243415)
+- [Monitor `consume-ztf` VM group](https://console.cloud.google.com/monitoring/groups/1832876284279888595?project=ardent-cycling-243415)
+- [Log: troy-manual-ops](https://console.cloud.google.com/logs/query;query=logName%3D%22projects%2Fardent-cycling-243415%2Flogs%2Ftroy-manual-ops%22?project=ardent-cycling-243415&query=%0A)
+---
+- [confluent_kafka API](https://docs.confluent.io/current/clients/confluent-kafka-python/#pythonclient-consumer)
+- [Kafka Python Client](https://docs.confluent.io/current/clients/python.html#)
+---
+- [ZTF Alert Archive - public](https://ztf.uw.edu/alerts/public/)
+---
+
+# Daily todo
+
+__Deploy today's broker__
+```bash
+cd ~/Pitt-Google-Broker/broker/cloud_functions
+./scheduleinstance_today.sh
+```
+
+Check [Dashboard `consume-ztf`](https://console.cloud.google.com/monitoring/dashboards/builder/3a371dcb-42d1-4ea0-add8-141d025924f6?project=ardent-cycling-243415&dashboardBuilderState=%257B%2522editModeEnabled%2522:false%257D&timeDomain=1h)
+- Today's broker is receiving alerts
+- Old brokers logging 'msg is None'
+
+__Old brokers done consuming: stop VM and load alerts -> BQ__
+```bash
+gcloud auth login
+pgbenv
+cd ~/PGB_testing/deploy2cloud_Aug2020
+
+day='19'
+month='11'
+monthname='nov'
+year='2020'
+
+./stopConsumer_loadBQ.sh ${day} ${month} ${monthname} ${year}
+```
 
 # Outline
 - [Pre-meeting To do list](#pretodo)
@@ -106,6 +142,15 @@ conda activate pgb
 # Deploy broker
 <!-- fs -->
 
+Image `consume_ztf_today:tag1117a` will start a consumer connected to current day's topic. Start an instanced named `consume-ztf-${monthday}` by running the following on cloud shell:
+```bash
+cd ~/Pitt-Google-Broker/broker/cloud_functions
+./scheduleinstance_today.sh
+```
+
+---
+To create a new image and start a VM instance using it, do the following:
+
 __Create and push the Docker image__
 ~[Install Docker on a Mac](https://runnable.com/docker/install-docker-on-macos)~
 
@@ -120,8 +165,6 @@ Following
 # configure Docker
 # gcloud auth configure-docker gcr.io
 
-# consume_ztf_today:tag106a
-
 # build the image
 cd /home/troy_raen_pitt/Pitt-Google-Broker
 docker build -t consume_ztf_today -f /home/troy_raen_pitt/Pitt-Google-Broker/docker_files/consume_ztf_today.Dockerfile . --no-cache=true
@@ -130,11 +173,11 @@ docker build -t consume_ztf_today -f /home/troy_raen_pitt/Pitt-Google-Broker/doc
 # tag the image
 git log -1 --format=format:"%H" # get git commit hash to use for the TAG
 # docker tag [SOURCE_IMAGE] [HOSTNAME]/[PROJECT-ID]/[IMAGE]:[TAG]
-docker tag consume_ztf_today gcr.io/ardent-cycling-243415/consume_ztf_today:tag1116a
+docker tag consume_ztf_today gcr.io/ardent-cycling-243415/consume_ztf_today:tag1117a
 # docker tag consume_ztf gcr.io/ardent-cycling-243415/consume_ztf:b0bf99587db1ce3f02ace762b087503d1d48db71c
 
 # push the image
-docker push gcr.io/ardent-cycling-243415/consume_ztf_today:tag1116a
+docker push gcr.io/ardent-cycling-243415/consume_ztf_today:tag1117a
 # docker push gcr.io/ardent-cycling-243415/consume_ztf:b0bf99587db1ce3f02ace762b087503d1d48db71c
 ```
 
@@ -252,6 +295,18 @@ gcloud compute instances describe consume-ztf-nov15 --zone us-central1-a
 gcloud logging read "resource.type=gce_instance AND resource.labels.instance_id=3541645371775973317" --limit 10 --format json
 ```
 
+```python
+from google.cloud import logging
+from google.cloud.logging import DESCENDING
+client = logging.Client()
+filter = "resource.type:gce_instance"
+for i, entry in enumerate(client.list_entries(filter_=filter)):
+    print(entry.resource)
+    print(entry.payload)
+    print()
+    if i==10: break
+```
+
 <!-- fe View VM logs -->
 
 <a name="stopvm"></a>
@@ -261,6 +316,7 @@ gcloud logging read "resource.type=gce_instance AND resource.labels.instance_id=
 gcloud compute instances list
 gcloud compute instances stop consume-ztf-nov12 --zone us-central1-a
 gcloud compute instances delete consume-ztf-nov12 consume-ztf-today --zone us-central1-a
+
 ```
 
 <!-- fe ## Manually stop, delete instance -->
@@ -379,6 +435,54 @@ Email exchange with Christopher Phillips (ZTF):
 
 I think these instructions or for if I'm using Kafka from the command line, wihch I have never gotten to work.
 
+Trying in python:
+
+```python
+
+from confluent_kafka import Consumer, KafkaException, TopicPartition, OFFSET_BEGINNING
+import os
+import sys
+
+os.environ['KRB5_CONFIG'] = './krb5.conf'
+# Consumer configuration
+# See https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
+conf = {
+            'bootstrap.servers': 'public2.alerts.ztf.uw.edu:9094',
+            'group.id': 'group',
+            'session.timeout.ms': 6000,
+            'enable.auto.commit': 'TRUE',
+            'sasl.kerberos.principal': 'pitt-reader@KAFKA.SECURE',
+            'sasl.kerberos.kinit.cmd': 'kinit -t "%{sasl.kerberos.keytab}" -k %{sasl.kerberos.principal}',
+            'sasl.kerberos.keytab': './pitt-reader.user.keytab',
+            'sasl.kerberos.service.name': 'kafka',
+            'security.protocol': 'SASL_PLAINTEXT',
+            'sasl.mechanisms': 'GSSAPI',
+            'auto.offset.reset': 'earliest',
+#             'enable.sparse.connections': 'false',
+#             'max.poll.interval.ms': 1000000
+            }
+c = Consumer(conf, debug='fetch')
+
+topic = 'ztf_20201116_programid1'
+tp = TopicPartition(topic)
+print(tp)
+tp.offset = OFFSET_BEGINNING
+print(tp)
+
+c.assign([tp])
+
+msg = None
+try:
+    while msg is None:
+        msg = c.poll(timeout=5.0)
+        print(msg)
+except KeyboardInterrupt:
+        sys.stderr.write('%% Aborted by user\n')
+finally:
+        c.close()
+
+```
+
 <!-- fe Restting Kafka consumer offsets -->
 
 
@@ -442,7 +546,7 @@ def print_assignment(consumer, partitions):
         print('Assignment:', partitions)
 
 # Subscribe to topics
-c.subscribe(['ztf_20201013_programid1'])
+c.subscribe(['ztf_20201119_programid1'])
 
 # msg = c.consume(num_messages=1, timeout=1)
 
