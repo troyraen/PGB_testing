@@ -29,26 +29,28 @@
     - [Python] [Install Python 3.7 on Debian 9](https://linuxize.com/post/how-to-install-python-3-7-on-debian-9/)
     - [Python] [Install Python 3.6.4 on Debian 9](https://www.rosehosting.com/blog/how-to-install-python-3-6-4-on-debian-9/)
     - [venv] [Using venv to isolate dependencies](https://cloud.google.com/python/docs/setup#installing_and_using_virtualenv)
+    - [Anaconda] [Install the Anaconda Python Distribution on Debian 10](https://www.digitalocean.com/community/tutorials/how-to-install-the-anaconda-python-distribution-on-debian-10)
     - Dashboard
         - [Connect to VM instance](https://cloud.google.com/compute/docs/instances/connecting-to-instance#gcloud)
         - [Console VM instances](https://console.cloud.google.com/compute/)
 
 
-<a name="HERE">LEFT OFF HERE</a>
 - _"make: python: Command not found"_
+    - change `python` -> `python3` in Makefile
 - Writing /tmp/easy_install-mrhz_3ms/python-snappy-0.5.4/setup.cfg
 Running python-snappy-0.5.4/setup.py -q bdist_egg --dist-dir /tmp/easy_install-mrhz_3ms/python-snappy-0.5.4/egg-dist-tmp-plaqkw8n
 /usr/lib/python3.7/distutils/dist.py:274: UserWarning: Unknown distribution option: 'cffi_modules'
   warnings.warn(msg)
 snappy/snappymodule.cc:28:10: fatal error: _Python.h: No such file or directory_
  #include "Python.h"
+    - uninstall/reinstall snappymodule
 
 ## Prereqs + Install
 <!-- fs -->
 __Create and connect to VM:__
 ```bash
 # create VM instance
-gcloud compute instances create rubin-stream-simulator \
+gcloud compute instances create rubin-stream-simulator-venv \
     --zone=us-central1-a \
     --machine-type=n1-standard-1 \
     --service-account=591409139500-compute@developer.gserviceaccount.com \
@@ -56,7 +58,7 @@ gcloud compute instances create rubin-stream-simulator \
     --metadata=google-logging-enabled=true
 
 # connect to instance
-gcloud compute ssh rubin-stream-simulator --project=ardent-cycling-243415 --zone=us-central1-a
+gcloud compute ssh rubin-stream-simulator-venv --project=ardent-cycling-243415 --zone=us-central1-a
 
 # stop/delete an instance
 gcloud compute instances delete rubin-stream-simulator --zone us-central1-a
@@ -67,12 +69,22 @@ __Install pre-reqs `alert-stream-simulator`__
 ```bash
 sudo apt-get update && sudo apt-get upgrade
 
-# conda env
+# # install conda
+# cd /tmp
+# sudo apt-get install curl
+# curl -O https://repo.anaconda.com/archive/Anaconda3-2020.11-Linux-x86_64.sh
+# bash Anaconda3-2020.11-Linux-x86_64.sh
+# source ~/anaconda3/bin/activate
+# conda init
+# conda list
+# # create env
+# conda create --name rass python=3
+# conda activate rass
 
-# # install and create virtual env
-# sudo apt-get install python3-venv
-# python3 -m venv ass # alert stream simulator env
-# source ass/bin/activate # activate alert stream simulator env
+# install and create virtual env
+sudo apt-get install python3-venv
+python3 -m venv ass # alert stream simulator env
+source ass/bin/activate # activate alert stream simulator env
 
 # # install Python 3.6 (following link above)
 # sudo apt-get install -y make build-essential libssl-dev zlib1g-dev
@@ -103,6 +115,7 @@ sudo apt-get update && sudo apt-get upgrade
 # sudo make altinstall
 # python3.7 --version # check install
 
+sudo apt-get install python3-dev
 
 # install Docker (following link above)
 # prereqs
@@ -123,9 +136,11 @@ sudo docker run hello-world # see quote below for further info
 # install other dependencies
 sudo apt-get install make git docker-compose libsnappy-dev
 # sudo apt-get install python3-pip #python3-setuptools
-# sudo pip3 uninstall fastavro
-# pip3 install fastavro==0.23
 
+# couldn't get 'create-stream' to work until i did this
+sudo pip3 uninstall fastavro
+pip3 install fastavro==0.23
+pip install astropy
 
 ```
 
@@ -137,6 +152,46 @@ __Install `alert-stream-simulator`__
 git clone https://github.com/lsst-dm/alert-stream-simulator.git
 cd alert-stream-simulator
 sudo make install
+# complains about not finding setuptools. run manually
+python setup.py install
+# comment that line out of the Makefile and run it again to complete setup
+sudo make install
+
+# add user to the docker group so can do docker-compose up
+sudo usermod -aG docker troy_raen_pitt
+# now log out and back in
+```
+
+__(skip this) Config to broadcast externally / Listen from external host__
+
+- [alert-stream-simulator/#networking-and-osx](https://github.com/lsst-dm/alert-stream-simulator/#networking-and-osx)
+- [GCP/Kafka open ports for external listening](https://github.com/GoogleCloudPlatform/java-docs-samples/tree/master/dataflow/flex-templates/kafka_to_bigquery#starting-the-kafka-server)
+
+"The listeners are:
+- Kafka: localhost:9092 (for the stream) and localhost:9292 (for JMX metrics)
+- Zookeeper: localhost:2181
+- Grafana: localhost:3000
+- InfluxDB: localhost:8086
+
+Edit the docker-compose.yml file, changing all references to "localhost" to the IP address of the broker."
+
+```bash
+# following instructions to open ports (above)
+# from any machine:
+gcloud compute instances list # find ip address
+# Create a firewall rule to open the port used by Zookeeper and Kafka.
+# Allow connections to ports 2181, 9092 in VMs with the "kafka-server" tag.
+gcloud compute firewall-rules create allow-kafka \
+  --target-tags "kafka-server" \
+  --allow tcp:2181,tcp:9092
+# add the tag to the instance if it's already been created
+gcloud compute instances add-tags rubin-stream-simulator-venv --tags=kafka-server
+
+# on the instance machine:
+# following networking-and-osx instructions (above)
+cd alert-stream-simulator
+nano docker-compose.yml
+# replace 'localhost' with the instance ip address
 ```
 <!-- fe Prereqs + Install -->
 
@@ -144,20 +199,25 @@ sudo make install
 <!-- fs -->
 ```bash
 # connect to the VM instance
-gcloud compute ssh rubin-stream-simulator --project=ardent-cycling-243415 --zone=us-central1-a
+gcloud compute ssh rubin-stream-simulator-venv --project=ardent-cycling-243415 --zone=us-central1-a
+cd /home/troy_raen_pitt/alert-stream-simulator
+source ass/bin/activate # activate alert stream simulator env
+# export KAFKA_ADDRESS="34.72.82.178" # needed if broadcasting to external listeners
 
 cd alert-stream-simulator
 docker-compose up
 # "This will spin up several containers; once the log output dies down, the system should be up and running."
+# open a second terminal
 docker-compose ps
 # "we expect to see "Up" for the "State" of all containers"
 
 # create a stream
-rubin-alert-sim create-stream --dst-topic=rubin_example data/rubin_single_ccd_sample.avro
+rubin-alert-sim create-stream --dst-topic=rubin_example --force data/rubin_single_ccd_sample.avro
 # replay the stream every --repeat-interval [sec]
 rubin-alert-sim --verbose play-stream \
     --src-topic=rubin_example \
     --dst-topic=rubin_example_stream \
+    --force \
     --repeat-interval=37
 # "Connect your consumers to the --dst-topic to simulate receiving Rubin's alerts."
 ```
@@ -168,11 +228,62 @@ rubin-alert-sim --verbose play-stream \
 # Dataflow job
 - [example] [`kafkataxi`](https://github.com/apache/beam/tree/master/sdks/python/apache_beam/examples/kafkataxi)
 - [`apache_beam.io.kafka`](https://github.com/apache/beam/blob/master/sdks/python/apache_beam/io/kafka.py)
+- Install
+    - [Install Java with Apt on Debian 10](https://www.digitalocean.com/community/tutorials/how-to-install-java-with-apt-on-debian-10)
 
-
-Check [alert-stream-simulator/#networking-and-osx](https://github.com/lsst-dm/alert-stream-simulator/#networking-and-osx) to figure out how to connect to stream from external machine.
-
+## Prereqs + GCP setup
+<!-- fs -->
+__Install pre-reqs__. Following instructions in `kafkataxi` example above.
 ```bash
-# find ip address of alert-stream-simulator
-gcloud compute instances list
+# connect to the VM instance
+gcloud compute ssh rubin-stream-simulator-venv --project=ardent-cycling-243415 --zone=us-central1-a
+source ass/bin/activate # activate alert stream simulator env
+
+sudo apt-get update
+
+# install java
+sudo apt install default-jre
+java -version
+# install dev kit
+sudo apt install default-jdk
+echo ${JAVA_HOME}
+
+# get errors about bdist_wheel and setuptools unless I install some prereqs
+# apt-get install --only-upgrade setuptools
+# pip install --upgrade setuptools
+pip install wheel
+pip install 'apache-beam[gcp]'
 ```
+
+__GCP setup__
+```bash
+pip install google-cloud-storage
+```
+
+```python
+from google.cloud import bigquery, storage
+PROJECT_ID = 'ardent-cycling-243415'
+
+# create buckets
+bucket_name = f'{PROJECT_ID}_rubin-sims'
+storage_client = storage.Client()
+storage_client.create_bucket(bucket_name)
+
+# create bq dataset
+bigquery_client = bigquery.Client()
+bigquery_client.create_dataset('rubin_sims', exists_ok=True)
+
+```
+
+<!-- fe ## Prereqs + GCP setup -->
+
+<a name="HERE">LEFT OFF HERE</a>
+## Create and run job
+<!-- fs -->
+Writing `rass-beam.py` by following/combining:
+- [salt2_vizier_beam.py](../_Salt2-Vizier/salt2_beam.py)
+- [kafka_taxi.py](https://github.com/apache/beam/blob/master/sdks/python/apache_beam/examples/kafkataxi/kafka_taxi.py)
+
+__Need to create the `output_schema` for rubin alerts -> bq table. Then test the pipeline.__
+
+<!-- fe Create and run job -->
