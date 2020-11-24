@@ -1,3 +1,5 @@
+[LEFT OFF HERE](#HERE)
+
 - [dataflow console](https://console.cloud.google.com/dataflow/jobs?project=ardent-cycling-243415)
 - [salt2-fits dashboard](https://console.cloud.google.com/monitoring/dashboards/resourceDetail/dataflow_job,project_id:ardent-cycling-243415,region:us-central1,job_name:salt2-fits?project=ardent-cycling-243415&timeDomain=1d)
 
@@ -41,6 +43,7 @@ python -m salt2_beam \
 <a name="salt2setup"></a>
 # Salt2 setup and fit data
 <!-- fs -->
+- [SALT2: using distant supernovae to improve the use of type Ia supernovae as distance indicators](https://www.aanda.org/articles/aa/pdf/2007/16/aa6930-06.pdf) (Salt2 paper)
 - [SNCosmo, Fitting a light curve with Salt2](https://sncosmo.readthedocs.io/en/stable/examples/plot_lc_fit.html)
 
 ```bash
@@ -70,6 +73,17 @@ print("The result contains the following attributes:\n", result.keys())
 
 sncosmo.plot_lc(data, model=fitted_model, errors=result.errors, fname='figs/fit.png')
 ```
+
+<a name="HERE">LEFT OFF HERE</a>
+
+Implement Daniel's feedback:
+- t0 has a big impact on quality of fit
+    - run a few fits on the data. look at how good of a job it does. if looks fine, leave it. otherwise, _limit to #days +- first datapoint with S/N > 5_
+- x0 is an overall scale factor, shouldn't need to bound it
+- _x1 and c bounds [-5,5]_
+    - normal stretch of Ia [-1,1] but want to accommodate other objects
+- if run in to wavelength error out of range (happens in high z), switch to salt2-extended
+
 <!-- fe Salt2 setup and fit data -->
 
 
