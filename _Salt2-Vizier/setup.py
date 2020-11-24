@@ -4,7 +4,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name = 'salt2-vizier-beam',
+    name = 'salt2-beam',
     version = '0.0.1',
     url = 'https://github.com/mwvgroup/Pitt-Google-Broker',
     author = 'Troy Raen',
