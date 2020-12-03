@@ -2,29 +2,57 @@
 
 - [dataflow console](https://console.cloud.google.com/dataflow/jobs?project=ardent-cycling-243415)
 - [salt2-fits dashboard](https://console.cloud.google.com/monitoring/dashboards/resourceDetail/dataflow_job,project_id:ardent-cycling-243415,region:us-central1,job_name:salt2-fits?project=ardent-cycling-243415&timeDomain=1d)
+- [BQ ZTF-Salt2 table](https://console.cloud.google.com/storage/browser/ardent-cycling-243415_ztf-sncosmo?project=ardent-cycling-243415&pageState=(%22StorageObjectListTable%22:(%22f%22:%22%255B%255D%22%29%29&prefix=&forceOnObjectsSortingFiltering=false)
 
 # Outline
-- [Run beam pipeline](#runbeam)
+- [Setup GCP resources](#gcpsetup)
 - [Filter for extragalactic transients](#filtertrans)
 - [Salt2 setup and fit example data](#salt2setup)
 - [Test with some BQ data](#testwithbq)
+- [Run beam pipeline](#runbeam)
 
 # To Do
 - [ ]  create buckets in `gcp_setup.py`
 
-<a name="runbeam"></a>
-# Run beam pipeline
+<a name="gcpsetup"></a>
+# Setup GCP resources
 <!-- fs -->
-```bash
-gcloud auth login
-cd PGB_testing/_Salt2-Vizier
-pgbenv
+- [GCS Making data public](https://cloud.google.com/storage/docs/access-control/making-data-public#code-samples_1)
+- couldn't find similar, straightforward example for BQ, but I pieced a solution together.
 
-python -m salt2_beam \
-            --region us-central1 \
-            --setup_file /home/troy_raen_pitt/PGB_testing/_Salt2-Vizier/setup.py
+```python
+from google.cloud import bigquery, storage
+PROJECT_ID = 'ardent-cycling-243415'
+
+### Create buckets
+bucket_name = f'{PROJECT_ID}_ztf-sncosmo'
+storage_client = storage.Client()
+bucket = storage_client.create_bucket(bucket_name)
+# bucket = storage_client.get_bucket(bucket_name)
+# Set uniform access to bucket (rather than per object permissions)
+bucket.iam_configuration.uniform_bucket_level_access_enabled = True
+bucket.patch()
+# Set bucket to be publicly readable
+policy = bucket.get_iam_policy(requested_policy_version=3)
+member, role = 'allUsers', 'roles/storage.objectViewer'
+policy.bindings.append({"role": role, "members": {member}})
+bucket.set_iam_policy(policy)
+
+### BQ tables
+# the table is created automatically as long as the dataset exists
+dataset_id, table_id = 'ztf_alerts', 'salt2'
+bigquery_client = bigquery.Client()
+# bigquery_client.create_dataset('dataflow_test', exists_ok=True)
+dataset = bigquery_client.get_dataset(dataset_id)
+# Set table to be publicly readable
+table = bigquery_client.get_table(f'{dataset_id}.{table_id}')
+policy = bigquery_client.get_iam_policy(table)
+member, role = 'allUsers', 'roles/bigquery.dataViewer'
+policy.bindings.append({"role": role, "members": {member}})
+bigquery_client.set_iam_policy(table, policy)
+
 ```
-<!-- fe Run beam pipeline -->
+<!-- fe Setup GCP resources -->
 
 
 <a name="filtertrans"></a>
@@ -45,6 +73,7 @@ python -m salt2_beam \
 <!-- fs -->
 - [SALT2: using distant supernovae to improve the use of type Ia supernovae as distance indicators](https://www.aanda.org/articles/aa/pdf/2007/16/aa6930-06.pdf) (Salt2 paper)
 - [SNCosmo, Fitting a light curve with Salt2](https://sncosmo.readthedocs.io/en/stable/examples/plot_lc_fit.html)
+- [ParDo explanation/example](https://beam.apache.org/documentation/programming-guide/#core-beam-transforms)
 
 ```bash
 pip install sncosmo
@@ -74,9 +103,7 @@ print("The result contains the following attributes:\n", result.keys())
 sncosmo.plot_lc(data, model=fitted_model, errors=result.errors, fname='figs/fit.png')
 ```
 
-<a name="HERE">LEFT OFF HERE</a>
-
-Implement Daniel's feedback:
+__Daniel's feedback:__
 - t0 has a big impact on quality of fit
     - run a few fits on the data. look at how good of a job it does. if looks fine, leave it. otherwise, _limit to #days +- first datapoint with S/N > 5_
 - x0 is an overall scale factor, shouldn't need to bound it
@@ -109,15 +136,16 @@ for row in query_job:
 
 # extract epoch info
 epoch_dictlst = []
+s2f = bhelp.salt2fit()
 for alert in alertlst:
-    epoch_dictlst.append(bhelp.extract_epochs(alert))
+    epoch_dictlst.append(s2f.extract_epochs(alert))
 # get one dict with at least 10 epochs
 for epoch_dict in epoch_dictlst:
     if len(epoch_dict['mjd']) > 10:
         print(len(epoch_dict['mjd']))
         break
 # get astropy table for salt2
-epoch_tbl = bhelp.format_for_salt2(epoch_dict)
+epoch_tbl, __ = s2f.format_for_salt2(epoch_dict)
 
 # run the fit
 model = sncosmo.Model(source='salt2')
@@ -146,6 +174,7 @@ for epoch_dict in epoch_dictlst:
         break
 
 # save lc to temp file and upload to bucket
+import shutil
 from tempfile import NamedTemporaryFile, SpooledTemporaryFile
 from google.cloud import storage
 storage_client = storage.Client()
@@ -153,21 +182,38 @@ beam_bucket = 'ardent-cycling-243415_dataflow-test'
 bucket = storage_client.get_bucket(beam_bucket)
 
 candid = 'fake-candid'
-with NamedTemporaryFile(mode='w') as temp_file:
-    sncosmo.plot_lc(epoch_tbl, model=fitted_model, errors=result.errors, fname=temp_file.name)
+with NamedTemporaryFile(suffix=".png") as temp_file:
+    fig = sncosmo.plot_lc(epoch_tbl, model=fitted_model, errors=result.errors)
+    fig.savefig(temp_file, format="png")
+    # fname=temp_file.name)
     temp_file.seek(0)
+    # write locally
+    destination = f'figs/fit_{candid}.png'
+    dest = shutil.copy(temp_file.name), destination)
+    # write to gcs
     gcs_filename = f'{candid}.png'
     blob = bucket.blob(f'sncosmo/plot_lc/{gcs_filename}')
     blob.upload_from_filename(filename=temp_file.name)
 
-# not working. try
-# https://beam.apache.org/releases/pydoc/2.25.0/apache_beam.io.localfilesystem.html
-# blob example usage
-# https://googleapis.dev/python/storage/latest/index.html?highlight=upload_from_filename
-# stackoverflow
-# https://stackoverflow.com/questions/54223769/writing-figure-to-google-cloud-storage-instead-of-local-drive
 ```
 <!-- fe Test with some BQ data -->
 
+
+<a name="runbeam"></a>
+# Run beam pipeline
+<!-- fs -->
+
+```bash
+gcloud auth login
+cd PGB_testing/_Salt2-Vizier
+pgbenv
+
+python -m salt2_beam \
+            --region us-central1 \
+            --setup_file /home/troy_raen_pitt/PGB_testing/_Salt2-Vizier/setup.py
+```
+<!-- fe Run beam pipeline -->
+
+<a name="HERE">LEFT OFF HERE</a>
 
 # Xmatch with Vizier and store in BQ
