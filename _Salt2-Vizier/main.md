@@ -2,7 +2,8 @@
 
 - [dataflow console](https://console.cloud.google.com/dataflow/jobs?project=ardent-cycling-243415)
 - [salt2-fits dashboard](https://console.cloud.google.com/monitoring/dashboards/resourceDetail/dataflow_job,project_id:ardent-cycling-243415,region:us-central1,job_name:salt2-fits?project=ardent-cycling-243415&timeDomain=1d)
-- [BQ ZTF-Salt2 table](https://console.cloud.google.com/storage/browser/ardent-cycling-243415_ztf-sncosmo?project=ardent-cycling-243415&pageState=(%22StorageObjectListTable%22:(%22f%22:%22%255B%255D%22%29%29&prefix=&forceOnObjectsSortingFiltering=false)
+- [Salt2 BQ table](https://console.cloud.google.com/bigquery?project=ardent-cycling-243415) (ztf_alerts.salt2)
+- [Salt2 jpg bucket](https://console.cloud.google.com/storage/browser/ardent-cycling-243415_ztf-sncosmo?project=ardent-cycling-243415&pageState=(%22StorageObjectListTable%22:(%22f%22:%22%255B%255D%22%29%29&prefix=&forceOnObjectsSortingFiltering=false)
 
 # Outline
 - [Setup GCP resources](#gcpsetup)
@@ -209,7 +210,7 @@ cd PGB_testing/_Salt2-Vizier
 pgbenv
 
 python -m salt2_beam \
-            --region us-central1 \
+            --zone us-central1-b \
             --setup_file /home/troy_raen_pitt/PGB_testing/_Salt2-Vizier/setup.py
 ```
 <!-- fe Run beam pipeline -->

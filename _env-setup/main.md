@@ -1,6 +1,58 @@
 # Anchors
+- [Setup Troy VM](#troyvm)
 - [Setup Cloud Shell](#cloudshell)
 - [install kafka directly and try to run from command line](#cmdkafka)
+
+
+<a name="troyvm"></a>
+# Setup Troy VM
+<!-- fs -->
+```bash
+# create the VM
+gcloud compute instances create troysVM \
+    --zone=us-east4-a \
+    --machine-type=n1-standard-4 \
+    --service-account=tjraen-owner@ardent-cycling-243415.iam.gserviceaccount.com \
+    --scopes=cloud-platform \
+    --metadata=google-logging-enabled=true
+
+# login
+gcloud compute ssh troy --project=ardent-cycling-243415 --zone=us-east4-a
+
+# scp example
+gcloud compute scp --recurse troy:/path/to/vm/source/file /path/to/local/dest/file
+```
+
+__Installs__
+```bash
+sudo apt-get update && sudo apt-get upgrade
+
+sudo apt-get install git wget gcc python-dev
+
+# install Miniconda
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+sudo mkdir /root/.conda
+bash Miniconda3-latest-Linux-x86_64.sh
+rm -f Miniconda3-latest-Linux-x86_64.sh
+
+# get latest repo versions
+# gcloud alpha cloud-shell ssh
+git clone https://github.com/mwvgroup/Pitt-Google-Broker.git
+git clone https://github.com/troyraen/PGB_testing.git
+
+# # create conda env
+conda create -n pgb python=3.8
+conda activate pgb
+
+# pip install some things
+pip install -r Pitt-Google-Broker/requirements.txt
+pip install ipython
+pip install lsst-alert-stream lsst-alert-packet
+# pip install google-cloud-storage
+#
+```
+
+<!-- fe Setup Troy VM -->
 
 
 <a name="cloudshell"></a>

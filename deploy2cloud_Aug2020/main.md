@@ -149,7 +149,7 @@ cd ~/Pitt-Google-Broker/broker/cloud_functions
 ```
 
 ---
-To create a new image and start a VM instance using it, do the following:
+To create a new image and start a VM instance using it (e.g., to consume a day other than today), do the following:
 
 __Create and push the Docker image__
 ~[Install Docker on a Mac](https://runnable.com/docker/install-docker-on-macos)~
@@ -173,11 +173,11 @@ docker build -t consume_ztf_today -f /home/troy_raen_pitt/Pitt-Google-Broker/doc
 # tag the image
 git log -1 --format=format:"%H" # get git commit hash to use for the TAG
 # docker tag [SOURCE_IMAGE] [HOSTNAME]/[PROJECT-ID]/[IMAGE]:[TAG]
-docker tag consume_ztf_today gcr.io/ardent-cycling-243415/consume_ztf_today:tag1117a
+docker tag consume_ztf_today gcr.io/ardent-cycling-243415/consume_ztf_today:tag1130a
 # docker tag consume_ztf gcr.io/ardent-cycling-243415/consume_ztf:b0bf99587db1ce3f02ace762b087503d1d48db71c
 
 # push the image
-docker push gcr.io/ardent-cycling-243415/consume_ztf_today:tag1117a
+docker push gcr.io/ardent-cycling-243415/consume_ztf_today:tag1130a
 # docker push gcr.io/ardent-cycling-243415/consume_ztf:b0bf99587db1ce3f02ace762b087503d1d48db71c
 ```
 

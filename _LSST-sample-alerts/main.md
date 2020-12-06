@@ -1,3 +1,7 @@
+- [bucket: rubin-sims/alert_avro](https://console.cloud.google.com/storage/browser/ardent-cycling-243415_rubin-sims/alert_avro?pageState=(%22StorageObjectListTable%22:(%22f%22:%22%255B%255D%22%29%29&project=ardent-cycling-243415&prefix=&forceOnObjectsSortingFiltering=false)
+- [BQ table](https://console.cloud.google.com/bigquery?project=ardent-cycling-243415) (rubin_sims.)
+- [dataflow console](https://console.cloud.google.com/dataflow/jobs?project=ardent-cycling-243415)
+
 Process Rubin sample alerts:
 1. Run the Rubin alert stream simulator (Kafka stream)
 2. Dataflow job to
@@ -12,6 +16,7 @@ Process Rubin sample alerts:
 - [VM: Alert Stream Simulator](#stream-sim-vm)
     - [Prereqs + Install](#sim-prereqs)
     - [Run `alert-stream-simulator`](#run-stream-sim)
+- [`pykafka` Consumer](#consumer)
 - [Dataflow job](#dataflow)
     - [Prereqs + GCP setup + Alert schema](#dataflow-prereqs)
     - [Create and run job](#dataflow-run)
@@ -41,12 +46,15 @@ Process Rubin sample alerts:
 <a name="stream-sim-vm"></a>
 # VM: Alert Stream Simulator
 <!-- fs -->
+<!-- fs LINKS -->
 - Rubin
     - [Alert stream simulator](https://github.com/lsst-dm/alert-stream-simulator/) (instructions + repo)
 - GCP
     - [Create VM instance](https://cloud.google.com/sdk/gcloud/reference/compute/instances/create)
     - [Creating and configuring VM instances](https://cloud.google.com/container-optimized-os/docs/how-to/create-configure-instance)
     - [Connect to VM instance](https://cloud.google.com/compute/docs/instances/connecting-to-instance#gcloud)
+    - [Resize a VM disk](https://cloud.google.com/compute/docs/disks/add-persistent-disk#gcloud_4) (Persistent disk space starts at 10G for all machine types)
+        - [extra instructions to access the newly added space](https://stackoverflow.com/questions/22381686/how-can-size-of-the-root-disk-in-google-compute-engine-be-increased)
     - [Containers on Compute Engine](https://cloud.google.com/compute/docs/containers)
     - [Docker] [Install Docker Engine on Debian](https://docs.docker.com/engine/install/debian/)
     - [Python] [Install Python 3.7 on Debian 9](https://linuxize.com/post/how-to-install-python-3-7-on-debian-9/)
@@ -55,7 +63,7 @@ Process Rubin sample alerts:
     - [Anaconda] [Install the Anaconda Python Distribution on Debian 10](https://www.digitalocean.com/community/tutorials/how-to-install-the-anaconda-python-distribution-on-debian-10)
     - Dashboard
         - [Console VM instances](https://console.cloud.google.com/compute/)
-
+<!-- fe LINKS -->
 
 <a name="sim-prereqs"></a>
 ## Prereqs + Install
@@ -70,6 +78,13 @@ gcloud compute instances create rubin-stream-simulator32 \
     --scopes=cloud-platform \
     --metadata=google-logging-enabled=true \
     --tags=kafka-server # for the firewall rule
+
+# increase the disk space (default starts at 10G for all machine types)
+gcloud compute disks resize rubin-stream-simulator32 --zone us-central1-a --size 20
+sudo apt install -y cloud-utils         # Debian jessie
+# sudo apt install -y cloud-guest-utils   # Debian stretch, Ubuntu
+sudo growpart /dev/sda 1
+sudo resize2fs /dev/sda1
 
 # connect to instance
 gcloud compute ssh rubin-stream-simulator32 --project=ardent-cycling-243415 --zone=us-central1-a
@@ -218,7 +233,7 @@ nano docker-compose.yml
 gcloud compute ssh rubin-stream-simulator32 --project=ardent-cycling-243415 --zone=us-central1-a
 source rass-venv/bin/activate # activate alert stream simulator env
 cd /home/troy_raen_pitt/alert-stream-simulator
-# export KAFKA_ADDRESS="34.72.82.178" # needed if broadcasting to external listeners
+# if VM has been shut down since last run, update IP address in docker-compose.yml
 
 docker-compose up
 # "This will spin up several containers; once the log output dies down, the system should be up and running."
@@ -248,9 +263,97 @@ rubin-alert-sim print-stream \
 <!-- fe VM: Alert Stream Simulator -->
 
 
+<a name="consumer"></a>
+# `pykafka` Consumer -> PubSub
+<!-- fs -->
+Cannot get Dataflow job to decode the alerts. Write a separate consumer to listen and store files in GCS. Optionally writes one file from GCS -> BQ table so that the table exists with the proper schema before the Beam PubSub consumer runs. This avoids having to manually supply a schema for Beam.
+- [LSST example] [Writing your own consumer](https://github.com/lsst-dm/alert-stream-simulator#writing-your-own-consumer)
+
+## pykafka Setup
+<!-- fs -->
+
+```bash
+pip install pykafka
+pip install lsst-alert-stream  #lsst-alert-packet
+```
+
+__GCP setup__
+```python
+from google.cloud import storage, pubsub_v1
+PROJECT_ID = 'ardent-cycling-243415'
+# bucket
+storage_client = storage.Client()
+bucket_name = f'{PROJECT_ID}_rubin-sims/alert_avro/'
+storage_client.create_bucket(bucket_name)
+
+# pubsub
+publisher = pubsub_v1.PublisherClient()
+subscriber = pubsub_v1.SubscriberClient()
+topic_name = 'rubin-simulated-alerts'
+topic_path = publisher.topic_path(PROJECT_ID, topic_name)
+sub_path = subscriber.subscription_path(PROJECT_ID, topic_name)
+publisher.create_topic(topic_path)
+subscriber.create_subscription(sub_path, topic_path)
+
+# listen to subscription
+subscribe_alerts(topic_name, PROJECT_ID, max_alerts=1)
+def subscribe_alerts(subscription_name, project_id, max_alerts=1):
+    """Download, decode, and return messages from a Pub/Sub topic
+
+    Args:
+        subscription_name   (str): The Pub/Sub subcription name linked to a Pub/Sub topic
+        max_alerts          (int): The maximum number of alerts to download
+
+    Returns:
+        A list of downloaded and decoded messages
+    """
+
+    subscriber = pubsub_v1.SubscriberClient()
+    subscription_path = subscriber.subscription_path(project_id, subscription_name)
+
+    response = subscriber.pull(subscription_path, max_messages=max_alerts)
+
+    message_list, ack_ids = [], []
+
+    for received_message in response.received_messages:
+        encoded = received_message.message.data
+        # message = encoded.decode('UTF-8')
+        message_list.append(encoded)
+        ack_ids.append(received_message.ack_id)
+
+    subscriber.acknowledge(subscription_path, ack_ids)
+
+    return (message_list)
+```
+<!-- fe pykafka Setup -->
+
+## Run the consumer
+<!-- fs -->
+```bash
+pgbenv
+cd ~/PGB_testing/_LSST-sample-alerts
+
+broker_host='34.70.184.212:9092'
+N_alerts=217
+bq_table='ardent-cycling-243415.rubin_sims.alerts' # optional
+# send bq_table if want to create a bq table from the last alert processed
+# doing so ensures the table exists with the proper schema
+# so that we do not have to manually specify one in Beam's WriteToBigQuery
+# gcs_filename = '176517576703083331_181078402474705757.avro'
+
+python -m rass-consumer ${broker_host} ${N_alerts} ${bq_table}
+```
+
+<!-- fe Run the consumer -->
+
+<!-- fe `pykafka` Consumer -> PubSub -->
+
+
+
 <a name="dataflow"></a>
 # Dataflow job
 <!-- fs -->
+<!-- fs LINKS -->
 - [example] [`kafkataxi`](https://github.com/apache/beam/tree/master/sdks/python/apache_beam/examples/kafkataxi)
 - [`apache_beam.io.kafka`](https://github.com/apache/beam/blob/master/sdks/python/apache_beam/io/kafka.py)
 - Install
@@ -258,6 +361,9 @@ rubin-alert-sim print-stream \
 - Rubin
     - [Read alert and schema](https://github.com/lsst/alert_packet/blob/master/examples/03-avro-fastavro-comparison.ipynb)
 - [possible alternative to `apache_beam.io.kafka.ReadFromKafka`](https://stackoverflow.com/questions/62775435/does-gcp-dataflow-support-kafka-io-in-python)
+- GCP
+    - [Generate BQ schema from JSON file](https://stackoverflow.com/questions/36127537/json-table-schema-to-bigquery-tableschema-for-bigquerysink/36162988) (2nd answer down)
+<!-- fe LINKS -->
 
 <a name="dataflow-prereqs"></a>
 ## Prereqs + GCP setup + Alert schema
@@ -314,10 +420,152 @@ bigquery_client.create_dataset('rubin_sims', exists_ok=True)
 
 __Install LSST packages__
 ```bash
-pip install lsst-alert-stream, lsst-alert-packet
+pip install lsst-alert-stream lsst-alert-packet
+```
+<!-- fe ## Prereqs + GCP setup + alert schema -->
+
+<a name="HERE">LEFT OFF HERE</a>
+
+__Load 1 alert, GCS -> BQ, so that table (with proper schema) is created__
+- _Use fastavro to write a uncompressed avro as a temp file, then upload that to BQ_
+    - get an alert from gcs bucket
+    - read with fastavro
+    - write temp file
+    - upload to BQ
+
+```python
+from google.cloud import storage
+project_id = 'ardent-cycling-243415'
+
+# get an alert
+bucket_name = 'rubin-sims'
+fname = '176517576703083331_181078402474705757.avro'
+gcs_fname = f'alert_avro/{fname}'
+storage_client = storage.Client(project_id)
+bucket = storage_client.get_bucket(f'{project_id}_{bucket_name}')
+blob = bucket.blob(gcs_fname)
+blob.download_to_filename(fname)
+
+# read with fastavro
+import fastavro as fa
+fa.is_avro(fname)  # this returns false
+with open(fname, 'rb') as fo:
+    for record in fa.reader(fo):
+        print(record)  # this doesn't work
+
+# check a ztf alert
+bucket_name = 'ztf_alert_avro_bucket'
+fname = '1602556012306.avro'
+storage_client = storage.Client(project_id)
+bucket = storage_client.get_bucket(f'{project_id}_{bucket_name}')
+blob = bucket.blob(fname)
+blob.download_to_filename(fname)
+
+fa.is_avro(fname)  # returns true
 ```
 
+
 __Get alert schema for input to WriteToBigQuery().__
+
+Following 'Generate BQ schema from JSON file' link above.
+
+- download the 'data/rubin_single_ccd_sample.avro' file from the VM running RASS
+- read with lsst alert packet, get writer schema
+- convert this to a bigquery schema
+
+```bash
+# install snappy
+sudo apt-get install libsnappy-dev
+pip install python-snappy
+
+# # download a schema
+# wget https://raw.githubusercontent.com/lsst/alert_packet/master/python/lsst/alert/packet/schema/4/0/lsst.v4_0.alert.avsc
+
+# download the alert avro file
+# gcloud compute scp --recurse instance-name:remote-dir local-dir
+gcloud compute scp --recurse rubin-stream-simulator32:/home/troy_raen_pitt/alert-stream-simulator/data/rubin_single_ccd_sample.avro .
+```
+
+```python
+import lsst.alert.packet as ap
+# fschema = 'lsst.v4_0.alert.avsc'
+schema = ap.Schema.from_file()#fschema)  # load _a_ schema. will get alert-specific schema later
+
+falerts = 'rubin_single_ccd_sample.avro'
+with open(falerts,'rb') as f:
+    writer_schema, packet_iter = schema.retrieve_alerts(f)
+    # writer_schema is the schema with which alerts were written
+    # (which may be different from this schema being used for deserialization)
+    # https://github.com/lsst/alert_packet/blob/master/python/lsst/alert/packet/schema.py
+    for packet in packet_iter:
+        print(packet['diaSource']['diaSourceId'])
+        break
+
+scm = writer_schema.definition # this is the schema as a dict
+
+import json
+from google.cloud import bigquery
+
+schemajson = 'schematmp.json'
+with open(schemajson, 'w') as fp:
+    json.dump(writer_schema.definition, fp)
+
+
+def _get_field_schema(field):
+    name = field['name']
+    field_type = field.get('type', 'STRING')
+    mode = field.get('mode', 'NULLABLE')
+    fields = field.get('fields', [])
+
+    if fields:
+        subschema = []
+        for f in fields:
+            fields_res = _get_field_schema(f)
+            subschema.append(fields_res)
+    else:
+        subschema = []
+
+    field_schema = bigquery.SchemaField(name=name,
+        field_type=field_type,
+        mode=mode,
+        fields=subschema
+    )
+    return field_schema
+
+def parse_bq_json_schema(schema_filename):
+    schema = []
+    with open(schema_filename, 'r') as infile:
+        jsonschema = json.load(infile)
+
+    for field in jsonschema:
+        schema.append(_get_field_schema(field))
+
+    return schema
+
+bq_schema = parse_bq_json_schema(schemajson)
+_get_field_schema(jsonschema)
+```
+
+
+
+
+```bash
+gcloud compute ssh rubin-stream-simulator32 --project=ardent-cycling-243415 --zone=us-central1-a
+source dataflow-venv/bin/activate
+# get an alert schema
+cd /home/troy_raen_pitt/alert-stream-simulator/data
+wget https://raw.githubusercontent.com/lsst/alert_packet/master/python/lsst/alert/packet/schema/4/0/lsst.v4_0.alert.avsc
+cd ..
+
+wget 34.70.184.212/home/troy_raen_pitt/alert-stream-simulator/data/lsst.v4_0.alert.avsc
+```
+
+- if output_schema is null
+    - parse an alert to get the header
+    - write it to a tmp file as JSON
+    - read the tmp file into a string -> output_schema
+
+#### SAND
 __Skipped in favor of `schema_autodetect`__
 - try using the beam to write to a file and look at it
 - use `lsst.alert.packet` to directly access a schema or open and look at an alert
@@ -340,19 +588,7 @@ ipython
 ```python
 from fastavro.schema import load_schema
 
-
-### SAND
-import lsst.alert.packet as ap
-schema = ap.Schema.from_file()
-
-falerts = 'data/rubin_single_ccd_sample.avro'
-with open(falerts,'rb') as f:
-    writer_schema, packet_iter = schema.retrieve_alerts(f)
-    for packet in packet_iter:
-        print(packet['diaSource']['diaSourceId'])
-        break
 ```
-<!-- fe ## Prereqs + GCP setup + alert schema -->
 
 
 <a name="dataflow-run"></a>
@@ -370,18 +606,18 @@ source dataflow-venv/bin/activate # activate alert stream simulator env
 # cd alert-stream-simulator # alerts are in data dir
 
 # create the files to run the beam job
-mkdir beam
-cd beam
-nano setup.py
-nano rass-beam.py
-
+# mkdir beam
+# cd beam
+# nano setup.py
+# nano rass-beam.py
 gcloud auth login
+cd ~/PGB_testing/_LSST-sample-alerts
 
 python -m rass-beam \
             --region us-central1 \
             --setup_file /home/troy_raen_pitt/beam/setup.py \
             --experiments use_runner_v2 \
-            --streaming true
+            --streaming
 
 ```
 
@@ -389,5 +625,3 @@ python -m rass-beam \
 <!-- fe Create and run job -->
 
 <!-- fe Dataflow job -->
-
-<a name="HERE">LEFT OFF HERE</a>
