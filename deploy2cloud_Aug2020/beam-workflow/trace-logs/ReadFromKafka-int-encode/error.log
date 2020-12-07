@@ -1,0 +1,29 @@
+(pgb) troyraen@troy:~/PGB_testing/deploy2cloud_Aug2020/beam-workflow$ python -m ztf-beam             --region us-central1             --setup_file setup.py             --experiments use_runner_v2             --streaming
+Traceback (most recent call last):
+  File "/home/troyraen/miniconda3/envs/pgb/lib/python3.8/runpy.py", line 194, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/home/troyraen/miniconda3/envs/pgb/lib/python3.8/runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "/home/troyraen/PGB_testing/deploy2cloud_Aug2020/beam-workflow/ztf-beam.py", line 62, in <module>
+    bp | 'Read Kafka stream' >> ReadFromKafka(
+  File "/home/troyraen/miniconda3/envs/pgb/lib/python3.8/site-packages/apache_beam/io/kafka.py", line 157, in __init__
+    super(ReadFromKafka, self).__init__(
+  File "/home/troyraen/miniconda3/envs/pgb/lib/python3.8/site-packages/apache_beam/transforms/external.py", line 241, in __init__
+    payload.payload() if isinstance(payload, PayloadBuilder) else payload)
+  File "/home/troyraen/miniconda3/envs/pgb/lib/python3.8/site-packages/apache_beam/transforms/external.py", line 98, in payload
+    return self.build().SerializeToString()
+  File "/home/troyraen/miniconda3/envs/pgb/lib/python3.8/site-packages/apache_beam/transforms/external.py", line 113, in build
+    schema=schema, payload=RowCoder(schema).encode(row))
+  File "/home/troyraen/miniconda3/envs/pgb/lib/python3.8/site-packages/apache_beam/coders/coders.py", line 465, in encode
+    return self.get_impl().encode(value)
+  File "apache_beam/coders/coder_impl.py", line 216, in apache_beam.coders.coder_impl.StreamCoderImpl.encode
+  File "apache_beam/coders/coder_impl.py", line 219, in apache_beam.coders.coder_impl.StreamCoderImpl.encode
+  File "apache_beam/coders/coder_impl.py", line 113, in apache_beam.coders.coder_impl.CoderImpl.encode_to_stream
+  File "/home/troyraen/miniconda3/envs/pgb/lib/python3.8/site-packages/apache_beam/coders/row_coder.py", line 191, in encode_to_stream
+    c.encode_to_stream(attr, out, True)
+  File "apache_beam/coders/coder_impl.py", line 559, in apache_beam.coders.coder_impl.MapCoderImpl.encode_to_stream
+  File "apache_beam/coders/coder_impl.py", line 251, in apache_beam.coders.coder_impl.CallbackCoderImpl.encode_to_stream
+  File "apache_beam/coders/coder_impl.py", line 253, in apache_beam.coders.coder_impl.CallbackCoderImpl.encode_to_stream
+  File "/home/troyraen/miniconda3/envs/pgb/lib/python3.8/site-packages/apache_beam/coders/coders.py", line 414, in encode
+    return value.encode('utf-8')
+AttributeError: 'int' object has no attribute 'encode'
