@@ -1,41 +1,25 @@
-import os
+#!/usr/bin/env python3
+# -*- coding: UTF-8 -*-
+
 import logging
-from datetime import datetime
 import apache_beam as beam
-from apache_beam.io.kafka import ReadFromKafka
-from apache_beam.io import Write, WriteToBigQuery
+from apache_beam.io import BigQueryDisposition as bqdisp
+from apache_beam.io import ReadFromPubSub, Write, WriteToBigQuery
 
-os.environ['KRB5_CONFIG'] = './config/krb5.conf'
+# from tempfile import SpooledTemporaryFile
+from apache_beam import DoFn
 
-now = datetime.now()
-month = f'{now.month:02d}'
-day = '01' # f'{now.day:02d}'
-year = f'{now.year}'
+# from beam_helpers import data_utils as dutils
+
+
+# year, month, day = '2020', '12', '07'
 
 # gcp resources
 PROJECTID = 'ardent-cycling-243415'
-dataflow_job_name = f'ztf-consumer-{year}{month}{day}'
+dataflow_job_name = f'ztf-alert-data-ps-extract-log'
 beam_bucket = 'ardent-cycling-243415_dataflow-test'
-output_bq_table = 'dataflow_test.ztf_alerts'
-
-# Kafka options
-ztf_server = 'public2.alerts.ztf.uw.edu:9094'
-ztf_principle = 'pitt-reader@KAFKA.SECURE'
-ztf_keytab_path = './config/pitt-reader.user.keytab'
-ztf_topic = f'ztf_{year}{month}{day}_programid1'
-config = {
-    'bootstrap.servers': ztf_server,
-    'group.id': 'group',
-    'session.timeout.ms': 6000,
-    'enable.auto.commit': 'False',
-    'sasl.kerberos.kinit.cmd': 'kinit -t "%{sasl.kerberos.keytab}" -k %{sasl.kerberos.principal}',
-    'sasl.kerberos.service.name': 'kafka',
-    'security.protocol': 'SASL_PLAINTEXT',
-    'sasl.mechanisms': 'GSSAPI',
-    'auto.offset.reset': 'earliest',
-    'sasl.kerberos.principal': ztf_principle,
-    'sasl.kerberos.keytab': ztf_keytab_path,
-}
+input_PS_topic = 'projects/ardent-cycling-243415/topics/ztf_alert_data'
+output_BQ_table = 'dataflow_test.ztf_alerts'
 
 # beam options
 options = beam.options.pipeline_options.PipelineOptions()
@@ -49,31 +33,44 @@ worker_options.disk_size_gb = 50
 worker_options.max_num_workers = 10
 options.view_as(beam.options.pipeline_options.StandardOptions).runner = 'DataflowRunner'
 
-# Fix schema class
-class FixSchema(beam.DoFn):
-    def process(self, element):
-        # typ = type(element)
-        logging.info(f'something happened')
-        return [None]
+class ExtractAlertData(DoFn):
+    # def setup(self):
+    #     import io
+    #     import fastavro as fa
+
+    def process(self, msg):
+        from io import BytesIO
+        from fastavro import reader
+
+        # Extract the alert data from msg -> dict
+        with BytesIO(msg) as fin:
+            # print(type(fin))
+            alertDicts = [r for r in reader(fin)]
+
+        candid = alertDicts[0]['candid']
+        logging.info(f'Extracted alert data dict for candid {candid}')
+
+        # print(f'{alertDicts[0]}')
+        return alertDicts
 
 
 with beam.Pipeline(options=options) as bp:
     output = (
-        bp | 'Read Kafka stream' >> ReadFromKafka(
-            consumer_config=config,
-            topics=[ztf_topic],
-            # key_deserializer='org.apache.kafka.common.serialization.StringDeserializer',
-            key_deserializer='org.apache.kafka.common.serialization.StringDeserializer',
-            value_deserializer='io.confluent.kafka.serializers.KafkaAvroDeserializer',
-            max_num_records = 1
-            # 'io.confluent.kafka.serializers.KafkaAvroDeserializer'
-            # 'org.apache.kafka.common.serialization.ByteArrayDeserializer'
-            )
-            | 'Fix Schema' >> beam.ParDo(FixSchema())
-            # | 'Write to BQ' >> Write(WriteToBigQuery(output_bq_table,
-            # schema='SCHEMA_AUTODETECT',
-            # create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED,
-            # write_disposition=beam.io.BigQueryDisposition.WRITE_TRUNCATE))
+        bp | 'ReadFromPubSub' >> ReadFromPubSub(topic=input_PS_topic)
+           | 'ExtractAlertDict' >> beam.ParDo(ExtractAlertData())
+           # | 'Print msg bytes' >> beam.Map(print)
+           # | 'WriteToBigQuery' >> Write(WriteToBigQuery(
+           #                      output_BQ_table,
+           #                      # schema='SCHEMA_AUTODETECT',
+           #                      project = PROJECTID,
+           #                      create_disposition = bqdisp.CREATE_NEVER,
+           #                      write_disposition = bqdisp.WRITE_APPEND,
+           #                      validate = False
+           #                      ))
     )
+
+
+    # alertDict | 'fit Salt2' >> beam.ParDo(s2.fitSalt2)
+
 
 # bp.run()  # .wait_until_finish()

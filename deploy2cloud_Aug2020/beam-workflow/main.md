@@ -1,6 +1,7 @@
 # ZTF Beam Consumer
 Rewriting the consumer into a Dataflow / Apache Beam job.
 
+# ToC
 - [Beam environment Prereqs](#beam-prereqs)
 - [Create GCP resources](#gcpsetup)
 - [Create and Run Beam](#runbeam)
@@ -8,8 +9,8 @@ Rewriting the consumer into a Dataflow / Apache Beam job.
 
 # To Do
 - __Fix handling of auth files (currently packaged with Dataflow job)__
-- [ ]  ReadFromKafka
-- [ ]  old code -> transform header and store in GCS
+- [-]  ReadFromKafka (not working, moving on)
+- [-]  old code -> transform header and store in GCS
 - [ ]  store in BQ
 - [ ]  fit with Salt2
 - [ ]  xmatch with Vizier
@@ -54,6 +55,15 @@ PROJECT_ID = 'ardent-cycling-243415'
 # bigquery_client.create_dataset('ztf_dataflow_test', exists_ok=True)
 
 ```
+
+__Create test table `dataflow_test.ztf_alerts` using schema from `ztf_alerts.alerts`__
+In Console -> BigQuery, perform this query:
+```
+CREATE TABLE dataflow_test.ztf_alerts AS
+SELECT *
+FROM ztf_alerts.alerts
+LIMIT 0
+```
 <!-- fe Create GCP resources -->
 
 
@@ -62,24 +72,50 @@ PROJECT_ID = 'ardent-cycling-243415'
 <!-- fs -->
 Writing `ztf-beam.py` using `_LSST-sample-alerts` and `_dataflow-test` content as guides.
 
-- read from kafka Stream
-- transform (fix schema)
-- write to gcs
-- write to bq
-- process
-
-Troy VM:
-- install Java
-- clone PGB_testing
-- scp auth files
+- [x]  update broker consumer to fix schema before publishing to PubSub
+- [ ]  listen to PS stream
+- [ ]  write to BQ
+- [ ]  Salt2
 
 __Run the job__
 ```bash
+pgbenv
+cd ~/PGB_testing/deploy2cloud_Aug2020/beam-workflow
 python -m ztf-beam \
             --region us-central1 \
-            --setup_file setup.py \
             --experiments use_runner_v2 \
+            --setup_file setup.py \
             --streaming
 ```
 
+
 <!-- fe Create and Run Beam -->
+
+# Sand
+
+__ZTF msg data -> dict__
+```python
+# first, get a ztf alert using notebook code.
+# msg.value() is the alert packet bytes
+from tempfile import SpooledTemporaryFile
+import fastavro as fa
+
+maxsize = 1500000
+with SpooledTemporaryFile(max_size=maxsize, mode='w+b') as temp_file:
+    temp_file.write(msg.value())
+    temp_file.seek(0)
+    data = [r for r in fa.reader(temp_file)]
+```
+
+__read a tempfile__
+```python
+from tempfile import SpooledTemporaryFile
+
+data = bytes('some-string', 'utf-8')
+maxsize = 1500000
+with SpooledTemporaryFile(max_size=maxsize, mode='w+b') as temp_file:
+    temp_file.write(data)
+    temp_file.seek(0)
+    r = temp_file.read()
+r.decode("utf-8")
+```
