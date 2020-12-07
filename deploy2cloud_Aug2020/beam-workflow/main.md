@@ -1,6 +1,8 @@
 # ZTF Beam Consumer
 Rewriting the consumer into a Dataflow / Apache Beam job.
 
+- [Monitor `production-ztf-alert-data-ps-extract-strip-bq`](https://console.cloud.google.com/dataflow/jobs/us-central1/2020-12-07_12_14_06-12880147207196234384;step=;mainTab=JOB_METRICS?project=ardent-cycling-243415)
+
 # ToC
 - [Beam environment Prereqs](#beam-prereqs)
 - [Create GCP resources](#gcpsetup)
@@ -8,10 +10,10 @@ Rewriting the consumer into a Dataflow / Apache Beam job.
 
 
 # To Do
-- __Fix handling of auth files (currently packaged with Dataflow job)__
 - [-]  ReadFromKafka (not working, moving on)
+    - Fix handling of auth files (currently packaged with Dataflow job)
 - [-]  old code -> transform header and store in GCS
-- [ ]  store in BQ
+- [x]  store in BQ
 - [ ]  fit with Salt2
 - [ ]  xmatch with Vizier
 
@@ -20,6 +22,8 @@ Rewriting the consumer into a Dataflow / Apache Beam job.
 - Beam API
     - [`apache_beam.io.kafka`](https://github.com/apache/beam/blob/master/sdks/python/apache_beam/io/kafka.py) (includes good description of the Java expansion service)
     - [`apache_beam.io.kafka.ReadFromKafka`](https://beam.apache.org/releases/pydoc/2.24.0/apache_beam.io.kafka.html#apache_beam.io.kafka.ReadFromKafka)
+- Dataflow
+    - [Updating an existing pipeline](https://cloud.google.com/dataflow/docs/guides/updating-a-pipeline) 
 - ['kafkataxi' example](https://github.com/apache/beam/tree/master/sdks/python/apache_beam/examples/kafkataxi)
 - [alternate option, `beam_nuggets`](http://mohaseeb.com/beam-nuggets/beam_nuggets.io.kafkaio.html)
 
