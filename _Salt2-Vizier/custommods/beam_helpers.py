@@ -273,6 +273,9 @@ def is_transient(alert):
             no_pointsource_counterpart = False
             
     where_detected = (dflc['isdiffpos'] == 't') # nondetections will be None
+    # Troy's note: this (dflc['isdiffpos']) is a required field and will not be None (and may be an integer). Here's the schema:
+    # {"name": "isdiffpos", "type": "string", "doc": "t or 1 => candidate is from positive (sci minus ref) subtraction; f or 0 => candidate is from negative (ref minus sci) subtraction"},
+    # I need to fix this code, but I think the point of this part of the filter is that transients should result in a _positive_ subtraction
     if np.sum(where_detected) >= 2:
         detection_times = dflc.loc[where_detected,'jd'].values
         dt = np.diff(detection_times)
