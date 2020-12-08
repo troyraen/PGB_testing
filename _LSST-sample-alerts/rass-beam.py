@@ -1,21 +1,23 @@
+#!/usr/bin/env python3
+# -*- coding: UTF-8 -*-
+
 import logging
 import apache_beam as beam
-from apache_beam.io.kafka import ReadFromKafka
-from apache_beam.io import Write, WriteToBigQuery
-# from apache_beam.io.BigQueryDisposition import CREATE_IF_NEEDED, WRITE_TRUNCATE
+# from apache_beam.io.kafka import ReadFromKafka
+from apache_beam.io.gcp.pubsub import ReadFromPubSub
+from apache_beam.io.gcp.bigquery import WriteToBigQuery
+# from apache_beam.io import Write, WriteToBigQuery
+from apache_beam.io import BigQueryDisposition as bqd
 
 # gcp resources
 PROJECTID = 'ardent-cycling-243415'
-dataflow_job_name = 'rubin-sims-raw_alert.value'
+dataflow_job_name = 'rubin-sims-read-from-avro'
 beam_bucket = 'ardent-cycling-243415_rubin-sims'
 output_bq_table = 'rubin_sims.alerts'
-
-# Kafka options
-consumer_config = {'bootstrap.servers': '34.67.113.119:9092',
-                   'enable.auto.commit': 'true',
-                   'auto.offset.reset': 'earliest'
-                }
-topic = 'rubin_example_stream'
+topic_name = 'rubin-simulated-alerts'
+topic_path = f'projects/{PROJECTID}/subscriptions/{topic_name}'
+# pubsub_client = pubsub_v1.PublisherClient()
+# topic_path = pubsub_client.topic_path(PROJECT_ID, topic_name)
 
 # beam options
 options = beam.options.pipeline_options.PipelineOptions()
@@ -27,34 +29,31 @@ gcloud_options.temp_location = f'gs://{beam_bucket}/temp'
 worker_options = options.view_as(beam.options.pipeline_options.WorkerOptions)
 worker_options.disk_size_gb = 50
 worker_options.max_num_workers = 3
-# worker_options.machine_type = 'n1-standard-8'
 options.view_as(beam.options.pipeline_options.StandardOptions).runner = 'DataflowRunner'
 
-class log_alert(beam.DoFn):
+
+class log_alert_strip_header(beam.DoFn):
     def start_batch():
         import lsst.alert.stream.serialization
 
-    def process(self, raw_alert):
-        alert = lsst.alert.stream.serialization.deserialize_alert(raw_alert.value)
-        # log alert type, alert as string
+    def process(self, alert_bytes):
+        alert = lsst.alert.stream.serialization.deserialize_alert(alert_bytes.value)
+        # log alert type, Id
         logging.info(f'Alert type: {type(alert)}')
         logging.info(f"Alert ID: {alert['alertId']}")
 
-        return None
+        return [alert_bytes[5:]]
+
 
 with beam.Pipeline(options=options) as bp:
     output = (
-        bp | 'Read Kafka stream' >> ReadFromKafka(
-            consumer_config=consumer_config,
-            topics=[topic],
-            # key_deserializer='org.apache.kafka.common.serialization.BytesDeserializer',
-            # value_deserializer='org.apache.kafka.common.serialization.BytesDeserializer'
-            )
-            | 'Log alert info' >> beam.ParDo(log_alert())
-            # | 'Write to BQ' >> Write(WriteToBigQuery(output_bq_table,
-            # schema='SCHEMA_AUTODETECT',
-            # create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED,
-            # write_disposition=beam.io.BigQueryDisposition.WRITE_TRUNCATE))
+        bp | 'Read alert Avro' >> ReadFromPubSub(subscription=topic_path)
+            | 'Log and strip header' >> beam.ParDo(log_alert_strip_header())
+            | 'Write to BQ' >> WriteToBigQuery(output_bq_table, project=PROJECTID,
+                                               schema='SCHEMA_AUTODETECT',
+                                               create_disposition=bqd.CREATE_IF_NEEDED,
+                                               write_disposition=bqd.WRITE_APPEND)
+            # salt2 + vizier?
     )
 
 # bp.run()  # .wait_until_finish()
