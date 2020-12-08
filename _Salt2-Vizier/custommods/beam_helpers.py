@@ -1,121 +1,250 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 
+from base64 import b64encode
+import logging
+from tempfile import NamedTemporaryFile
 import numpy as np
 import pandas as pd
 from astropy.table import Table
 from astropy.time import Time
 import astropy.units as u
+import sncosmo
+from sncosmo.fitting import DataQualityError
+import apache_beam as beam
+from google.cloud import storage
 
-def extract_epochs(alert):
-    """ Collects data from each observation epoch of a single alert.
 
-    Args:
-        alert (dict): dictionary of alert data from ZTF
 
-    Returns:
-        epoch_dict (dict): keys: 'mjd','flux','fluxerr','passband','photflag'
-                           values: Lists of light curve data with one element
-                                   per epoch.
+class salt2fit(beam.DoFn):
+    """ Performs a Salt2 fit on alert history.
+
+    Example usage:
+        Beam Alert Packet PCollection | 'Salt2 fit' >> beam.ParDo(beam_helpers.salt2fit())
     """
+    def start_bundle(self, bucket_name='ardent-cycling-243415_ztf-sncosmo'):
+        # Connect to Google Cloud Storage
+        self.storage_client = storage.Client()
+        self.bucket = self.storage_client.bucket(bucket_name)
 
-    # collect epochs
-    epochs = alert['prv_candidates'] + [alert['candidate']]
-    
-    # prepare empty lists to zip epoch data
-    mjd, flux, fluxerr, passband, photflag, magzpsci, magzpsciunc, zpsys = ([] for i in range(8))
-    # passband mapping
-    fid_dict = {1: 'g', 2: 'r', 3: 'i'}
-    # set and track epochs with missing zeropoints
-    zp_fallback, zp_in_keys = 26.0, [0 for i in range(len(epochs))]
+    def process(self, alert):
+        """ Performs a Salt2 fit on alert history.
 
-    for epoch in epochs:
-        # skip nondetections.
-        if epoch['magpsf'] is None: continue
-        # fix this. try setting magnitude to epoch['diffmaglim']
+        Args:
+            alert (dict): dictionary of alert data from ZTF
 
-        # check zeropoint (early schema(s) did not contain this)
-        if 'magzpsci' not in epoch.keys():  # fix this. do something better.
-            _warn('Epoch does not have zeropoint data. '
-                  'Setting to {}'.format(zp_fallback))
-            zp_in_keys[n] = 1
-            epoch['magzpsci'] = zp_fallback
+        Returns:
+            salt2_fit (dict): output of Salt2 fit, formatted for upload to BQ
+        """
 
-        # Gather epoch data
-        mjd.append(jd_to_mjd(epoch['jd']))
-        f, ferr = mag_to_flux(epoch['magpsf'], epoch['magzpsci'],
-                              epoch['sigmapsf'])
-        flux.append(f)
-        fluxerr.append(ferr)
-        passband.append(fid_dict[epoch['fid']])
-        photflag.append(4096)  # fix this, determines trigger time
-        # (1st mjd where this == 6144)
-        magzpsci.append(epoch['magzpsci'])
-        magzpsciunc.append(epoch['magzpsciunc'])
-        zpsys.append('ab')
+        SNthresh = 5.  # min S/N to proceed with fit, needed to get good amplitude fit
+        num_det_thresh = 5  # min num detections to proceed with fit
+        # move this ^ to a filter outside this function
+        objectId = alert['objectId']
+        candid = alert['candid']
 
-    # check zeropoint consistency
-    # either 0 or all epochs (with detections) should be missing zeropoints
-    if sum(zp_in_keys) not in [0, len(mjd)]:
-        raise ValueError((f'Inconsistent zeropoint values in alert {oid}. '
-                          'Cannot continue with classification.'))
+        # extract epochs from alert
+        epoch_dict = self.extract_epochs(alert)
+        # format epoch data for salt2
+        epoch_tbl, astats = self.format_for_salt2(epoch_dict)
 
-    # Set trigger date. fix this.
-    photflag = np.asarray(photflag)
-    photflag[flux == np.max(flux)] = 6144
+        # return None if poor S/N
+        if astats['maxSN'] < SNthresh:
+            logging.info(f"max(S/N) = {astats['maxSN']} (< {SNthresh}) for alertID {candid}. \
+                           Skipping Salt2 fit.")
+            return None
+        # return None if insuficient number of detections
+        if astats['num_detections'] < num_det_thresh:
+            logging.info(f"Number of detections = {astats['num_detections']} (< {num_det_thresh}) \
+                           for alertID {candid}. Skipping Salt2 fit.")
+            return None
 
-    # Gather info
-    epoch_dict = {
-        'mjd': np.asarray(mjd),
-        'flux': np.asarray(flux),
-        'fluxerr': np.asarray(fluxerr),
-        'passband': np.asarray(passband),
-        'photflag': photflag,
-        'magzpsci': magzpsci,
-        'magzpsciunc': magzpsciunc,
-        'zpsys': zpsys,
-    }
+        # fit with salt2
+        t0_guess, t0_pm = int(astats['mjd_SNabove5']), 10
+        model = sncosmo.Model(source='salt2')
+        try:
+            result, fitted_model = sncosmo.fit_lc(epoch_tbl, model,
+                                    ['z', 't0', 'x0', 'x1', 'c'],  # parameters of model to vary
+                                    bounds={'z': (0.01, 0.2),  # https://arxiv.org/pdf/2009.01242.pdf
+                                            'x1': (-5.,5.),
+                                            'c': (-5.,5.),
+                                            't0': (t0_guess-t0_pm,t0_guess+t0_pm),
+                                    }
+            )
 
-    return epoch_dict
+        # return None if there was an error
+        except DataQualityError as dqe:
+            logging.info(f'Salt2 fit failed with DataQualityError for alertID {candid}. {dqe}')
+            return None
+        except RuntimeError as rte:
+            logging.info(f'Salt2 fit failed with RuntimeError for alertID {candid}. {rte}')
+            return None
 
-def mag_to_flux(mag, zeropoint, magerr):
-    """ Converts an AB magnitude and its error to fluxes.
-    """
-    flux = 10 ** ((zeropoint - mag) / 2.5)
-    fluxerr = flux * magerr * np.log(10 / 2.5)
-    return flux, fluxerr
+        else:
+            # cov_names depreciated in favor of vparam_names, but flatten_result() requires it
+            result['cov_names'] = result['vparam_names']
+            flatresult = dict(sncosmo.flatten_result(result))
 
-def jd_to_mjd(jd):
-    """ Converts Julian Date to modified Julian Date.
-    """
-    return Time(jd, format='jd').mjd
+            # filename = f'{candid}.png'
+            # lfs.create(f'plotlc_temp/{filename}')
 
-def format_for_salt2(epoch_dict):
-    """ Formats alert data for input to Salt2.
-    
-    Args:
-        epoch_dict (dict): epoch_dict = extract_epochs(epochs)
+            # plot the lightcurve and save in bucket and bytestring for BQ
+            with NamedTemporaryFile(suffix=".png") as temp_file:
+                    fig = sncosmo.plot_lc(epoch_tbl, model=fitted_model, errors=result.errors)
+                    fig.savefig(temp_file, format="png")
+                    temp_file.seek(0)
+                    # upload to GCS
+                    gcs_filename = f'candid_{candid}.png'
+                    blob = self.bucket.blob(f'salt2/plot_lc/{gcs_filename}')
+                    blob.upload_from_filename(filename=temp_file.name)
+                    # bytestring for BQ
+                    temp_file.seek(0)
+                    plot_lc_bytes = b64encode(temp_file.read())
 
-    Returns:
-        epoch_tbl: (Table): astropy Table of epoch data formatted for Salt2
-    """
+        return [{'objectId': objectId,
+                 'candid': candid,
+                 **flatresult,
+                 'plot_lc_bytes': plot_lc_bytes,
+                }]
+        # param_dict = {result.param_names[i]: result.parameters[i] for i in range(len(result.param_names))}
+        # return [{'candid': candid,
+        #         'chisq': result.chisq,
+        #         'ndof': result.ndof,
+        #         **param_dict
+        #         }]
 
-    col_map = {# salt2 name: ztf name,
-                'time': 'mjd',
-                'band': 'passband',
-                'flux': 'flux',
-                'fluxerr': 'fluxerr',
-                'zp': 'magzpsci',
-                'zpsys': 'zpsys',
+    def extract_epochs(self, alert):
+        """ Collects data from each observation epoch of a single alert.
+
+        Args:
+            alert (dict): dictionary of alert data from ZTF
+
+        Returns:
+            epoch_dict (dict): keys: 'mjd','flux','fluxerr','passband','photflag'
+                            values: Lists of light curve data with one element
+                                    per epoch.
+        """
+
+        # collect epochs
+        epochs = alert['prv_candidates'] + [alert['candidate']]
+        
+        # prepare empty lists to zip epoch data
+        mjd, flux, fluxerr, passband, photflag, magzpsci, magzpsciunc, zpsys, isdiffpos = ([] for i in range(9))
+        # passband mapping
+        fid_dict = {1: 'g', 2: 'r', 3: 'i'}
+        # set and track epochs with missing zeropoints
+        zp_fallback, zp_in_keys = 26.0, [0 for i in range(len(epochs))]
+
+        for epoch in epochs:
+            # skip nondetections.
+            if epoch['magpsf'] is None: continue
+            # fix this. try setting magnitude to epoch['diffmaglim']
+
+            # check zeropoint (early schema(s) did not contain this)
+            if 'magzpsci' not in epoch.keys():  # fix this. do something better.
+                _warn('Epoch does not have zeropoint data. '
+                    'Setting to {}'.format(zp_fallback))
+                zp_in_keys[n] = 1
+                epoch['magzpsci'] = zp_fallback
+
+            # Gather epoch data
+            mjd.append(self.jd_to_mjd(epoch['jd']))
+            f, ferr = self.mag_to_flux(epoch['magpsf'], epoch['magzpsci'],
+                                epoch['sigmapsf'])
+            flux.append(f)
+            fluxerr.append(ferr)
+            passband.append(fid_dict[epoch['fid']])
+            photflag.append(4096)  # fix this, determines trigger time
+            # (1st mjd where this == 6144)
+            magzpsci.append(epoch['magzpsci'])
+            magzpsciunc.append(epoch['magzpsciunc'])
+            zpsys.append('ab')
+            isdiffpos.append(epoch['isdiffpos']) # used to count detections/nondetections (null if non)
+
+        # check zeropoint consistency
+        # either 0 or all epochs (with detections) should be missing zeropoints
+        if sum(zp_in_keys) not in [0, len(mjd)]:
+            raise ValueError((f'Inconsistent zeropoint values in alert {oid}. '
+                            'Cannot continue with classification.'))
+
+        # # Set trigger date for Rapid. fix this.
+        # photflag = np.asarray(photflag)
+        # photflag[flux == np.max(flux)] = 6144
+
+        # Gather info
+        epoch_dict = {
+            'mjd': np.asarray(mjd),
+            'flux': np.asarray(flux),
+            'fluxerr': np.asarray(fluxerr),
+            'passband': np.asarray(passband),
+            # 'photflag': photflag,
+            'magzpsci': magzpsci,
+            'magzpsciunc': magzpsciunc,
+            'zpsys': zpsys,
+            'isdiffpos': np.asarray(isdiffpos)
+        }
+
+        return epoch_dict
+
+    def mag_to_flux(self, mag, zeropoint, magerr):
+        """ Converts an AB magnitude and its error to fluxes.
+        """
+        flux = 10 ** ((zeropoint - mag) / 2.5)
+        fluxerr = flux * magerr * np.log(10 / 2.5)
+        return flux, fluxerr
+
+    def jd_to_mjd(self, jd):
+        """ Converts Julian Date to modified Julian Date.
+        """
+        return Time(jd, format='jd').mjd
+
+    def format_for_salt2(self, epoch_dict):
+        """ Formats alert data for input to Salt2.
+        
+        Args:
+            epoch_dict (dict): epoch_dict = extract_epochs(epochs)
+
+        Returns:
+            epoch_tbl: (Table): astropy Table of epoch data formatted for Salt2
+        """
+
+        col_map = {# salt2 name: ztf name,
+                    'time': 'mjd',
+                    'band': 'passband',
+                    'flux': 'flux',
+                    'fluxerr': 'fluxerr',
+                    'zp': 'magzpsci',
+                    'zpsys': 'zpsys',
+                    }
+
+        data = {sname: epoch_dict[zname] for sname, zname in col_map.items()}
+        data['band'] = [f'ztf{val}' for val in data['band']]  # salt2 registered bandpass name
+        
+        epoch_tbl = Table(data)
+
+        # S/N
+        SN = epoch_dict['flux'] / epoch_dict['fluxerr']
+        # find max S/N
+        maxSN = np.max(SN)
+        # find mjd of first epoch with S/N above 5 (to constrain t0)
+        SNabove5 = np.where(SN>5)[0]
+        mjd_SNabove5 = epoch_dict['mjd'][SNabove5[0]] if len(SNabove5)>0 else None
+
+        # check number of detections, see is_transient()
+        num_detections = np.sum(epoch_dict['isdiffpos'] == 't')
+
+        stats = {   'maxSN': maxSN,
+                    'mjd_SNabove5': mjd_SNabove5,
+                    'num_detections': num_detections,
                 }
+        return (epoch_tbl, stats)
 
-    data = {sname: epoch_dict[zname] for sname, zname in col_map.items()}
-    data['band'] = [f'ztf{val}' for val in data['band']]  # salt2 registered bandpass name
-    
-    epoch_tbl = Table(data)
+    def num_detections(self, epoch_dict):
+        # want minimum number of detections before fitting with Salt2
+        where_detected = (epoch_dict['isdiffpos'] == 't') # nondetections will be None
+        return np.sum(where_detected)
 
-    return epoch_tbl
-    
+# change to is_extragalactic_transient()
 def is_transient(alert):
     """ Checks whether alert is likely to be an extragalactic transient.
     Most of this was taken from 
@@ -128,13 +257,15 @@ def is_transient(alert):
         is_transient (bool): whether alert is likely to be an extragalactic transient.
     """
 
-    dflc = make_dataframe(alert)
+    dflc = _is_transient_make_dataframe(alert)
     candidate = dflc.loc[0]
     
     is_positive_sub = candidate['isdiffpos'] == 't'
     
-    if (candidate['distpsnr1'] is None) or (candidate['distpsnr1'] > 1.5):
+    if (candidate['distpsnr1'] is None) or (candidate['distpsnr1'] > 1.5):  # arcsec
         no_pointsource_counterpart = True
+            # closest candidate == star < 1.5 arcsec away -> candidate probably star
+            # closet candidate == star > 1.5 arcsec away
     else:
         if candidate['sgscore1'] < 0.5:
             no_pointsource_counterpart = True
@@ -148,18 +279,13 @@ def is_transient(alert):
         not_moving = np.max(dt) >= (30*u.minute).to(u.day).value
     else:
         not_moving = False
-    
-    # want minimum number of detections before fitting with Salt2
-    if np.sum(where_detected) >= 10:
-        ten_detections = True
-    else:
-        ten_detections = False
-    
+        
     no_ssobject = (candidate['ssdistnr'] is None) or (candidate['ssdistnr'] < 0) or (candidate['ssdistnr'] > 5)
+    # candidate['ssdistnr'] == -999 is another encoding of None
     
-    return is_positive_sub and no_pointsource_counterpart and not_moving and no_ssobject and ten_detections
+    return is_positive_sub and no_pointsource_counterpart and not_moving and no_ssobject
 
-def make_dataframe(alert):
+def _is_transient_make_dataframe(alert):
     """ Packages an alert into a dataframe.
     Taken from https://github.com/ZwickyTransientFacility/ztf-avro-alert/blob/master/notebooks/Filtering_alerts.ipynb
     """
