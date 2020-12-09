@@ -88,7 +88,8 @@ cd ~/PGB_testing/deploy2cloud_Aug2020/beam-workflow
 python -m ztf-beam \
             --region us-central1 \
             --experiments use_runner_v2 \
-            --setup_file setup.py \
+            --setup_file /home/troy_raen_pitt/PGB_testing/deploy2cloud_Aug2020/beam-workflow/setup.py \
+            --update \
             --streaming
 ```
 

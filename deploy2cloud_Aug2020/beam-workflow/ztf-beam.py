@@ -5,6 +5,7 @@ import logging
 import apache_beam as beam
 from apache_beam.io import BigQueryDisposition as bqdisp
 from apache_beam.io import ReadFromPubSub, Write, WriteToBigQuery
+from apache_beam.io.gcp.bigquery_tools import RetryStrategy
 
 from apache_beam import DoFn
 
@@ -67,7 +68,11 @@ with beam.Pipeline(options=options) as bp:
                                 project = PROJECTID,
                                 create_disposition = bqdisp.CREATE_NEVER,
                                 write_disposition = bqdisp.WRITE_APPEND,
-                                validate = False
+                                validate = False,
+                                insert_retry_strategy = RetryStrategy.RETRY_NEVER,
+                                # TODO: ^ => returns PColl of Deadletter items.
+                                # Do something with them.
+                                batch_size = 5000,
                                 ))
     )
 
