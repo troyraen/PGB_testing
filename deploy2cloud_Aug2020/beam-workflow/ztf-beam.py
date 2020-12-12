@@ -12,11 +12,12 @@ from apache_beam import DoFn
 
 # gcp resources
 PROJECTID = 'ardent-cycling-243415'
-dataflow_job_name = f'production-ztf-alert-data-ps-extract-strip-bq'
+# dataflow_job_name = f'production-ztf-alert-data-ps-extract-strip-bq'
+dataflow_job_name = f'test-ztf-branch'
 beam_bucket = 'ardent-cycling-243415_dataflow-test'
 input_PS_topic = 'projects/ardent-cycling-243415/topics/ztf_alert_data'
-# output_BQ_table = 'dataflow_test.ztf_alerts'
-output_BQ_table = 'ztf_alerts.alerts'
+output_BQ_table = 'dataflow_test.ztf_alerts'
+# output_BQ_table = 'ztf_alerts.alerts'
 
 # beam options
 options = beam.options.pipeline_options.PipelineOptions()
@@ -57,24 +58,22 @@ class StripCutouts(DoFn):
 
 
 with beam.Pipeline(options=options) as bp:
-    output = (
-        bp | 'ReadFromPubSub' >> ReadFromPubSub(topic=input_PS_topic)
-           | 'ExtractAlertDict' >> beam.ParDo(ExtractAlertDict())
-           # encoding error until cutouts were stripped. see fnc for more details
-           | 'StripCutouts' >> beam.ParDo(StripCutouts())
-           | 'WriteToBigQuery' >> Write(WriteToBigQuery(
-                                output_BQ_table,
-                                # schema='SCHEMA_AUTODETECT',
-                                project = PROJECTID,
-                                create_disposition = bqdisp.CREATE_NEVER,
-                                write_disposition = bqdisp.WRITE_APPEND,
-                                validate = False,
-                                insert_retry_strategy = RetryStrategy.RETRY_NEVER,
-                                # TODO: ^ => returns PColl of Deadletter items.
-                                # Do something with them.
-                                batch_size = 5000,
-                                ))
-    )
+    # Read from PS and extract data as dicts
+    PSin = (bp | 'ReadFromPubSub' >> ReadFromPubSub(topic=input_PS_topic))
+    alertDicts = (PSin | 'ExtractAlertDict' >> beam.ParDo(ExtractAlertDict()))
+    alertDictsSC = (alertDicts | 'StripCutouts' >> beam.ParDo(StripCutouts()))
 
-
-# bp.run()  # .wait_until_finish()
+    # Upload to BQ
+    # BQ encoding error until cutouts were stripped. see StripCutouts() for more details
+    # alerts with no history cannot currently be uploaded -> RETRY_NEVER
+    # TODO: track deadletters, get them uploaded to bq
+    bqDeadletters = (alertDictsSC | 'WriteToBigQuery' >> Write(WriteToBigQuery(
+                            output_BQ_table,
+                            # schema='SCHEMA_AUTODETECT',
+                            project = PROJECTID,
+                            create_disposition = bqdisp.CREATE_NEVER,
+                            write_disposition = bqdisp.WRITE_APPEND,
+                            validate = False,
+                            insert_retry_strategy = RetryStrategy.RETRY_NEVER,
+                            batch_size = 5000,
+                            )))
