@@ -9,7 +9,7 @@ Been trying to `ReadFromKafka` in the `Beam` pipeline.
             - [same as above with more comments](http://mail-archives.apache.org/mod_mbox/beam-user/202007.mbox/%3CCAGAbUe-XUQTnO9DUw=LFc-8R9SPdHjsNiaM6yjbT36070B+Psw@mail.gmail.com%3E)
             - [Apache Beam KafkaIO Key Deserializer for messages with no keys](https://stackoverflow.com/questions/62378585/apache-beam-kafkaio-key-deserializer-for-messages-with-no-keys) [Watch this unanswered question.]
     - `msg.value()` returns the alert byte string
-- It seems like reading an Avro encoded Kafka alert _should_ be supported. (See [here](https://stackoverflow.com/questions/62544980/how-to-infer-avro-schema-from-a-kafka-topic-in-apache-beam-kafkaio) for a Java example.) However, I haven't been able to make it work with ztf or lsst sim alerts.
+- It seems like reading an Avro encoded Kafka alert _should_ be supported. (See [here](https://stackoverflow.com/questions/62544980/how-to-infer-avro-schema-from-a-kafka-topic-in-apache-beam-kafkaio) and [here](https://stackoverflow.com/questions/54755668/how-to-deserialising-kafka-avro-messages-using-apache-beam) for Java example.) However, I haven't been able to make it work with ztf or lsst sim alerts.
 
 ---
 What follows is the `main.md` from `beam-workflow` dir when I left this problem.
