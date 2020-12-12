@@ -14,8 +14,8 @@
 
 __Deploy today's broker__
 ```bash
-cd ~/Pitt-Google-Broker/broker/cloud_functions
-./scheduleinstance_today.sh
+monthday=dec11
+gcloud compute instances create-with-container consume-ztf-${monthday} --zone=us-central1-a --machine-type=n1-standard-1 --image-project=cos-cloud --container-image=gcr.io/ardent-cycling-243415/consume_ztf_today:tag1117a --labels=env=consume-ztf --image-family=cos-stable --service-account=591409139500-compute@developer.gserviceaccount.com --scopes=cloud-platform
 ```
 
 Check [Dashboard `consume-ztf`](https://console.cloud.google.com/monitoring/dashboards/builder/3a371dcb-42d1-4ea0-add8-141d025924f6?project=ardent-cycling-243415&dashboardBuilderState=%257B%2522editModeEnabled%2522:false%257D&timeDomain=1h)
@@ -28,9 +28,9 @@ gcloud auth login
 pgbenv
 cd ~/PGB_testing/deploy2cloud_Aug2020
 
-day='19'
-month='11'
-monthname='nov'
+day='08'
+month='12'
+monthname='dec'
 year='2020'
 
 ./stopConsumer_loadBQ.sh ${day} ${month} ${monthname} ${year}
@@ -43,6 +43,7 @@ year='2020'
 - [Status check](#status)
     - [Set up environment](#envsetup)
 - [Deploying the Broker](#deploybroker)
+    - [Test whether can connect to Kafka stream using code from notebooks/ztf-auth-test.ipynb](#testkafkaconnection)
 - [Helpful GCP tasks](#gcptasks)
     - [Error Logging](#logging)
     - [View VM logs](#viewlogs)
@@ -171,13 +172,14 @@ docker build -t consume_ztf_today -f /home/troy_raen_pitt/Pitt-Google-Broker/doc
 # docker build -t consume_ztf -f /home/troy_raen_pitt/Pitt-Google-Broker/docker_files/consume_ztf.Dockerfile . #--no-cache=true
 
 # tag the image
+tag='tag1203a'
 git log -1 --format=format:"%H" # get git commit hash to use for the TAG
 # docker tag [SOURCE_IMAGE] [HOSTNAME]/[PROJECT-ID]/[IMAGE]:[TAG]
-docker tag consume_ztf_today gcr.io/ardent-cycling-243415/consume_ztf_today:tag1130a
+docker tag consume_ztf_today gcr.io/ardent-cycling-243415/consume_ztf_today:${tag}
 # docker tag consume_ztf gcr.io/ardent-cycling-243415/consume_ztf:b0bf99587db1ce3f02ace762b087503d1d48db71c
 
 # push the image
-docker push gcr.io/ardent-cycling-243415/consume_ztf_today:tag1130a
+docker push gcr.io/ardent-cycling-243415/consume_ztf_today:${tag}
 # docker push gcr.io/ardent-cycling-243415/consume_ztf:b0bf99587db1ce3f02ace762b087503d1d48db71c
 ```
 
@@ -516,6 +518,7 @@ gcloud functions call startInstancePubSub --data '{"data":"eyJ6b25lIjoidXMtY2Vud
 ### Test whether can connect to Kafka stream using code from notebooks/ztf-auth-test.ipynb
 <!-- fs -->
 ```python
+# conda activate pgb2, on Roy
 from confluent_kafka import Consumer, KafkaException
 import os
 import sys
@@ -546,7 +549,7 @@ def print_assignment(consumer, partitions):
         print('Assignment:', partitions)
 
 # Subscribe to topics
-c.subscribe(['ztf_20201119_programid1'])
+c.subscribe(['ztf_20201201_programid1'])
 
 # msg = c.consume(num_messages=1, timeout=1)
 

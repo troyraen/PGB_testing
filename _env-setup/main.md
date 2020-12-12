@@ -3,10 +3,15 @@
 - [Setup Cloud Shell](#cloudshell)
 - [install kafka directly and try to run from command line](#cmdkafka)
 
+# Links
+- [Console] [VM Instances](https://console.cloud.google.com/compute/instances?project=ardent-cycling-243415)
+- [Install Java with Apt on Debian 10](https://www.digitalocean.com/community/tutorials/how-to-install-java-with-apt-on-debian-10)
+
 
 <a name="troyvm"></a>
 # Setup Troy VM
 <!-- fs -->
+__Create and access VM__
 ```bash
 # create the VM
 gcloud compute instances create troysVM \
@@ -19,8 +24,9 @@ gcloud compute instances create troysVM \
 # login
 gcloud compute ssh troy --project=ardent-cycling-243415 --zone=us-east4-a
 
-# scp example
-gcloud compute scp --recurse troy:/path/to/vm/source/file /path/to/local/dest/file
+# scp examples
+gcloud compute scp --recurse troy:/path/to/vm/source/file /path/to/local/dest/file  --zone us-east4-a
+gcloud alpha cloud-shell scp cloudshell:~/PGB_testing/_LSST-sample-alerts/rass-consumer.py localhost:/Users/troyraen/Downloads/.
 ```
 
 __Installs__
@@ -48,8 +54,19 @@ conda activate pgb
 pip install -r Pitt-Google-Broker/requirements.txt
 pip install ipython
 pip install lsst-alert-stream lsst-alert-packet
+pip install apache-beam[gcp]
 # pip install google-cloud-storage
-#
+
+# install Java for Beam Kafka
+sudo apt-get update
+sudo apt install -y default-jre
+java -version
+# install dev kit
+sudo apt install -y default-jdk
+javac -version
+# export JAVA_HOME='/usr/bin/javac' # not sure this is the right dir for this
+# echo ${JAVA_HOME}
+
 ```
 
 <!-- fe Setup Troy VM -->

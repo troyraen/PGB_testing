@@ -41,6 +41,8 @@ Process Rubin sample alerts:
     - Larger samples of alerts suitable for bulk analysis and scale testing are available; see [sample_alert_info](https://github.com/lsst-dm/sample_alert_info/) for locations from which alerts can be downloaded.
 - [Bellm presentation](https://project.lsst.org/meetings/rubin2020/sites/lsst.org.meetings.rubin2020/files/Bellm_Rubin_alerts_200813.pdf) (contains links listed above)
 - [DMTN-093: Design of the LSST Alert Distribution System](https://dmtn-093.lsst.io/#management-and-evolution)
+- __These are Snappy Avro compressed files in Confluent Wire format (first 5 bytes of message is the wire header)__
+
 <!-- fe Links: LSST Sample Alerts -->
 
 <a name="stream-sim-vm"></a>
@@ -425,6 +427,7 @@ pip install lsst-alert-stream lsst-alert-packet
 <!-- fe ## Prereqs + GCP setup + alert schema -->
 
 <a name="HERE">LEFT OFF HERE</a>
+_rewrite rubin sim avros to GCS without stripping header. use the following code to try to read that file to see if it was written as a proper avro file._
 
 __Load 1 alert, GCS -> BQ, so that table (with proper schema) is created__
 - _Use fastavro to write a uncompressed avro as a temp file, then upload that to BQ_
@@ -464,6 +467,8 @@ blob.download_to_filename(fname)
 fa.is_avro(fname)  # returns true
 ```
 
+
+__SAND__
 
 __Get alert schema for input to WriteToBigQuery().__
 

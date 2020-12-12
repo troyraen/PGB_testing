@@ -1,9 +1,11 @@
 - Apache Beam
     - [Apache Beam Overview/Tutorial](https://beam.apache.org/documentation/programming-guide/)
     - [Managing Python Pipeline Dependencies](https://beam.apache.org/documentation/sdks/python-pipeline-dependencies/#multiple-file-dependencies)
+    - [ParDo explanation/example](https://beam.apache.org/documentation/programming-guide/#core-beam-transforms)
 - Dataflow
     - [dataflow console](https://console.cloud.google.com/dataflow/jobs?project=ardent-cycling-243415)
-    - [Dataflow Quotas & limits](https://cloud.google.com/dataflow/quotas) 
+    - [Dataflow Quotas & limits](https://cloud.google.com/dataflow/quotas)
+    - [Logging pipeline messages](https://cloud.google.com/dataflow/docs/guides/logging)
 
 
 # Setup (install Beam, create resources)
