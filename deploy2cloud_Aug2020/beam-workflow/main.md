@@ -23,10 +23,11 @@ Rewriting the consumer into a Dataflow / Apache Beam job.
     - [`apache_beam.io.kafka`](https://github.com/apache/beam/blob/master/sdks/python/apache_beam/io/kafka.py) (includes good description of the Java expansion service)
     - [`apache_beam.io.kafka.ReadFromKafka`](https://beam.apache.org/releases/pydoc/2.24.0/apache_beam.io.kafka.html#apache_beam.io.kafka.ReadFromKafka)
 - Dataflow
-    - [Updating an existing pipeline](https://cloud.google.com/dataflow/docs/guides/updating-a-pipeline) 
+    - [Updating an existing pipeline](https://cloud.google.com/dataflow/docs/guides/updating-a-pipeline)
+    - [Read AVRO messages from PubSub in Dataflow Python](https://stackoverflow.com/questions/61216075/read-avro-messages-from-pubsub-in-dataflow-python)
 - ['kafkataxi' example](https://github.com/apache/beam/tree/master/sdks/python/apache_beam/examples/kafkataxi)
 - [alternate option, `beam_nuggets`](http://mohaseeb.com/beam-nuggets/beam_nuggets.io.kafkaio.html)
-
+- [`fastavro reader`](https://fastavro.readthedocs.io/en/latest/reader.html)
 
 <a name="beam-prereqs"></a>
 # Beam environment Prereqs
