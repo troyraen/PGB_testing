@@ -1,0 +1,79 @@
+Last login: Fri Dec 11 15:55:55 on ttys002
+(base) Roy:notebooks troyraen$ conda activate pgb2
+(pgb2) Roy:notebooks troyraen$ ipython
+Python 3.7.8 | packaged by conda-forge | (default, Jul 31 2020, 02:37:09) 
+Type 'copyright', 'credits' or 'license' for more information
+IPython 7.18.1 -- An enhanced Interactive Python. Type '?' for help.
+
+In [1]: from confluent_kafka import Consumer, KafkaException
+   ...: import os
+   ...: import sys
+
+In [2]: os.environ['KRB5_CONFIG'] = './krb5.conf'
+
+In [3]: conf = {
+   ...:             'bootstrap.servers': 'public2.alerts.ztf.uw.edu:9094',
+   ...:             'group.id': 'group',
+   ...:             'session.timeout.ms': 6000,
+   ...:             'enable.auto.commit': 'TRUE',
+   ...:             'sasl.kerberos.principal': 'pitt-reader@KAFKA.SECURE',
+   ...:             'sasl.kerberos.kinit.cmd': 'kinit -t "%{sasl.kerberos.keytab}" -k %{sasl.kerberos.principal}',
+   ...:             'sasl.kerberos.keytab': './pitt-reader.user.keytab',
+   ...:             'sasl.kerberos.service.name': 'kafka',
+   ...:             'security.protocol': 'SASL_PLAINTEXT',
+   ...:             'sasl.mechanisms': 'GSSAPI',
+   ...:             'auto.offset.reset': 'earliest'
+   ...:             }
+
+In [4]: c = Consumer(conf)
+
+In [5]: %5|1607720826.103|LIBSASL|rdkafka#consumer-1| [thrd:sasl_plaintext://public2.alerts.ztf.uw.edu:9094/bootstrap]: sasl_plaintext://public2.alerts.ztf.uw.edu:9094/bootstrap: GSSAPI client step 1
+%5|1607720826.291|LIBSASL|rdkafka#consumer-1| [thrd:sasl_plaintext://public2.alerts.ztf.uw.edu:9094/bootstrap]: sasl_plaintext://public2.alerts.ztf.uw.edu:9094/bootstrap: GSSAPI client step 1
+%5|1607720826.380|LIBSASL|rdkafka#consumer-1| [thrd:sasl_plaintext://public2.alerts.ztf.uw.edu:9094/bootstrap]: sasl_plaintext://public2.alerts.ztf.uw.edu:9094/bootstrap: GSSAPI client step 2
+%5|1607720826.984|LIBSASL|rdkafka#consumer-1| [thrd:GroupCoordinator]: GroupCoordinator/0: GSSAPI client step 1
+%5|1607720827.080|LIBSASL|rdkafka#consumer-1| [thrd:GroupCoordinator]: GroupCoordinator/0: GSSAPI client step 1
+%5|1607720827.168|LIBSASL|rdkafka#consumer-1| [thrd:GroupCoordinator]: GroupCoordinator/0: GSSAPI client step 2
+In [5]: c.subscribe(['ztf_20201206_programid1'])
+
+In [6]: # Retrieve a message from Kafka stream
+   ...: try:
+   ...:     while True:
+   ...:         msg = c.poll(timeout=1.0)
+   ...:         if msg is None:
+   ...:             print('msg is None')
+   ...:             continue
+   ...:         if msg.error():
+   ...:             raise KafkaException(msg.error())
+   ...:         else:
+   ...:             print('msg retrieved')
+   ...:             break
+   ...: except KeyboardInterrupt:
+   ...:         print('%% Aborted by user\n')
+   ...: finally:
+   ...:         c.close()
+   ...: 
+%4|1607720923.782|SESSTMOUT|rdkafka#consumer-1| [thrd:main]: Consumer group session timed out (in join-state assigned) after 83341 ms without a successful response from the group coordinator (broker 0, last error was Broker: Group rebalance in progress): revoking assignment and rejoining group
+msg is None
+msg is None
+msg is None
+msg is None
+msg is None
+msg retrieved
+
+In [7]: # Print some msg attributes
+
+In [8]: msg.offset()
+Out[9]: 0
+
+In [10]: msg.partition()
+Out[11]: 0
+
+In [12]: msg.key()
+
+In [13]: msg.what_happens_if_the_attribute_doesnt_exist()
+---------------------------------------------------------------------------
+AttributeError                            Traceback (most recent call last)
+<ipython-input-14-4187d2fcd710> in <module>
+----> 1 msg.what_happens_if_the_attribute_doesnt_exist()
+
+AttributeError: 'cimpl.Message' object has no attribute 'what_happens_if_the_attribute_doesnt_exist'
