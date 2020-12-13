@@ -3,12 +3,29 @@
 
 from setuptools import setup, find_packages
 
-requires = ['apache_beam[gcp]',
-            'google-cloud-dataflow',
-            'workflow',
-            # 'io',
+include = [
+            'beam_helpers', 
+            'beam_helpers.*'
+          ]
+
+requires = [
+            'apache_beam[gcp]',
+            'astropy',
+            # 'base64', builtin
             'fastavro',
-            # 'tempfile',  'astropy', 'sncosmo', 'iminuit'
+            'google-cloud-core>=1.4.1',
+            'google-cloud-dataflow',
+            'google-cloud-datastore>=1.15',
+            'google-cloud-storage',
+            'iminuit',
+            # 'io', builtin
+            # 'json', builtin
+            'matplotlib',
+            'numpy',
+            'pandas',
+            'sncosmo',
+            # 'tempfile', builtin
+            'workflow',
             ]
 
 setup(
@@ -18,5 +35,5 @@ setup(
     author = 'Troy Raen',
     author_email = 'troy.raen@pitt.edu',
     install_requires = requires,
-    # packages = find_packages(include=['beam_helpers', 'beam_helpers.*']),
+    packages = find_packages(include=include),
 )
