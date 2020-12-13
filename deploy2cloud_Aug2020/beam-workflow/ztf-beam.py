@@ -15,13 +15,14 @@ from beam_helpers.fit_salt2 import fitSalt2
 
 # gcp resources
 PROJECTID = 'ardent-cycling-243415'
-# dataflow_job_name = f'production-ztf-alert-data-ps-extract-strip-bq'
-dataflow_job_name = f'test-ztf-salt2-let-rte-fail'
+dataflow_job_name = f'production-ztf-ps-bq-exgal-salt2'
+# dataflow_job_name = f'test-ztf-full-exgal-salt2'
 beam_bucket = f'{PROJECTID}_dataflow-test'
 input_PS_topic = f'projects/{PROJECTID}/topics/ztf_alert_data'
-output_BQ_fullpacket = 'dataflow_test.ztf_alerts'
-# output_BQ_fullpacket = 'ztf_alerts.alerts'
-output_BQ_salt2 = 'dataflow_test.salt2'
+# output_BQ_fullpacket = 'dataflow_test.ztf_alerts'
+output_BQ_fullpacket = 'ztf_alerts.alerts'
+# output_BQ_salt2 = 'dataflow_test.salt2'
+output_BQ_salt2 = 'ztf_alerts.salt2'
 output_PS_exgalTrans = f'projects/{PROJECTID}/topics/ztf_exgalac_trans'
 output_PS_salt2 = f'projects/{PROJECTID}/topics/ztf_salt2'
 
@@ -35,9 +36,8 @@ gcloud_options.staging_location = f'gs://{beam_bucket}/staging'
 gcloud_options.temp_location = f'gs://{beam_bucket}/temp'
 worker_options = options.view_as(beam.options.pipeline_options.WorkerOptions)
 worker_options.disk_size_gb = 50
-worker_options.max_num_workers = 5
+worker_options.max_num_workers = 25
 options.view_as(beam.options.pipeline_options.StandardOptions).runner = 'DataflowRunner'
-# options.view_as(beam.options.pipeline_options.StandardOptions).runner = 'DirectRunner'
 
 config_writeBqFullPacket = {
                             # 'schema': 'SCHEMA_AUTODETECT',
@@ -51,8 +51,8 @@ config_writeBqFullPacket = {
 
 config_writeBqSalt2 = {
                       'schema': 'objectId:STRING, candid:INTEGER, success:INTEGER, ncall:INTEGER, chisq:FLOAT, ndof:INTEGER, z:FLOAT, z_err:FLOAT, t0:FLOAT, t0_err:FLOAT, x0:FLOAT, x0_err:FLOAT, x1:FLOAT, x1_err:FLOAT, c:FLOAT, c_err:FLOAT, z_z_cov:FLOAT, z_t0_cov:FLOAT, z_x0_cov:FLOAT, z_x1_cov:FLOAT, z_c_cov:FLOAT, t0_z_cov:FLOAT, t0_t0_cov:FLOAT, t0_x0_cov:FLOAT, t0_x1_cov:FLOAT, t0_c_cov:FLOAT, x0_z_cov:FLOAT, x0_t0_cov:FLOAT, x0_x0_cov:FLOAT, x0_x1_cov:FLOAT, x0_c_cov:FLOAT, x1_z_cov:FLOAT, x1_t0_cov:FLOAT, x1_x0_cov:FLOAT, x1_x1_cov:FLOAT, x1_c_cov:FLOAT, c_z_cov:FLOAT, c_t0_cov:FLOAT, c_x0_cov:FLOAT, c_x1_cov:FLOAT, c_c_cov:FLOAT, plot_lc_bytes:BYTES',
-                      'create_disposition': bqdisp.CREATE_IF_NEEDED,
-                      'write_disposition': bqdisp.WRITE_TRUNCATE,
+                      'create_disposition': bqdisp.CREATE_NEVER,
+                      'write_disposition': bqdisp.WRITE_APPEND,
                       'insert_retry_strategy': RetryStrategy.RETRY_NEVER,
                     #   'batch_size': 50,
 

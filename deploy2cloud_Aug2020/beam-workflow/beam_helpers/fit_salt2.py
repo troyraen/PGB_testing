@@ -65,9 +65,9 @@ class fitSalt2(DoFn):
             result, fitted_model = sncosmo.fit_lc(epoch_tbl, model,
                                     ['z', 't0', 'x0', 'x1', 'c'],  # parameters of model to vary
                                     bounds={'z': (0.01, 0.2),  # https://arxiv.org/pdf/2009.01242.pdf
-                                            # 'x1': (-5.,5.),
-                                            # 'c': (-5.,5.),
-                                            # 't0': (t0_guess-t0_pm,t0_guess+t0_pm),
+                                            'x1': (-5.,5.),
+                                            'c': (-5.,5.),
+                                            't0': (t0_guess-t0_pm,t0_guess+t0_pm),
                                     }
             )
 
@@ -87,7 +87,7 @@ class fitSalt2(DoFn):
             # filename = f'{candid}.png'
             # lfs.create(f'plotlc_temp/{filename}')
 
-            # plot the lightcurve and save in bucket and bytestring for BQ
+            # plot the lightcurve and save in bucket
             with NamedTemporaryFile(suffix=".png") as temp_file:
                     fig = sncosmo.plot_lc(epoch_tbl, model=fitted_model, errors=result.errors)
                     fig.savefig(temp_file, format="png")
@@ -98,12 +98,13 @@ class fitSalt2(DoFn):
                     blob.upload_from_filename(filename=temp_file.name)
                     # bytestring for BQ
                     temp_file.seek(0)
-                    plot_lc_bytes = b64encode(temp_file.read())
+                    # plot_lc_bytes = b64encode(temp_file.read())
+                    # PS can't encode these bytes, drop them from the result dict
 
         return [{'objectId': objectId,
                  'candid': candid,
                  **flatresult,
-                 'plot_lc_bytes': plot_lc_bytes,
+                #  'plot_lc_bytes': plot_lc_bytes,
                 }]
 
     def extract_epochs(self, alert):

@@ -17,13 +17,13 @@ requires = [
             'google-cloud-dataflow',
             'google-cloud-datastore>=1.15',
             'google-cloud-storage',
-            'iminuit',
+            'iminuit==1.4.9',
             # 'io', builtin
             # 'json', builtin
             'matplotlib',
             'numpy',
             'pandas',
-            'sncosmo',
+            'sncosmo==2.2.0',
             # 'tempfile', builtin
             'workflow',
             ]
