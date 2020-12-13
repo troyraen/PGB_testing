@@ -2,6 +2,7 @@
     - [Apache Beam Overview/Tutorial](https://beam.apache.org/documentation/programming-guide/)
     - [Managing Python Pipeline Dependencies](https://beam.apache.org/documentation/sdks/python-pipeline-dependencies/#multiple-file-dependencies)
     - [ParDo explanation/example](https://beam.apache.org/documentation/programming-guide/#core-beam-transforms)
+    - [Deadletter handling, Python example](https://stackoverflow.com/questions/59102519/monitoring-writetobigquery)
 - Dataflow
     - [dataflow console](https://console.cloud.google.com/dataflow/jobs?project=ardent-cycling-243415)
     - [Dataflow Quotas & limits](https://cloud.google.com/dataflow/quotas)

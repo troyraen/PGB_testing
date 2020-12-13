@@ -14,8 +14,10 @@ Rewriting the consumer into a Dataflow / Apache Beam job.
     - Fix handling of auth files (currently packaged with Dataflow job)
 - [-]  old code -> transform header and store in GCS
 - [x]  store in BQ
-- [ ]  fit with Salt2
+    - [ ]  handle dead letters ([Python example](https://stackoverflow.com/questions/59102519/monitoring-writetobigquery))
+- [x]  fit with Salt2
 - [ ]  xmatch with Vizier
+
 
 
 # Links
@@ -47,7 +49,7 @@ EXPORT ztf_keytab_path='pitt-reader.user.keytab'
 # Create GCP resources
 <!-- fs -->
 ```python
-from google.cloud import bigquery, storage
+from google.cloud import pubsub_v1, bigquery, storage
 PROJECT_ID = 'ardent-cycling-243415'
 
 # # create buckets
@@ -59,6 +61,12 @@ PROJECT_ID = 'ardent-cycling-243415'
 # bigquery_client = bigquery.Client()
 # bigquery_client.create_dataset('ztf_dataflow_test', exists_ok=True)
 
+# create PS topics
+topic = 'ztf_exgalac_trans'
+topic = 'ztf_salt2'
+publisher = pubsub_v1.PublisherClient()
+topic_path = publisher.topic_path(PROJECT_ID, topic)
+publisher.create_topic(topic_path)
 ```
 
 __Create test table `dataflow_test.ztf_alerts` using schema from `ztf_alerts.alerts`__
@@ -78,6 +86,7 @@ LIMIT 0
 Writing `ztf-beam.py` using `_LSST-sample-alerts` and `_dataflow-test` content as guides.
 
 - [x]  update broker consumer to fix schema before publishing to PubSub
+    - _this has been pushed, but currently deploying pre-saved containers => not using this update. PS is reading the messages fine._
 - [ ]  listen to PS stream
 - [ ]  write to BQ
 - [ ]  Salt2
@@ -86,12 +95,14 @@ __Run the job__
 ```bash
 pgbenv
 cd ~/PGB_testing/deploy2cloud_Aug2020/beam-workflow
+region='us-central1'
+# region='us-east1'
 python -m ztf-beam \
-            --region us-central1 \
+            --region ${region} \
             --experiments use_runner_v2 \
             --setup_file /home/troy_raen_pitt/PGB_testing/deploy2cloud_Aug2020/beam-workflow/setup.py \
-            --update \
-            --streaming
+            --streaming \
+            # --update \
 ```
 
 

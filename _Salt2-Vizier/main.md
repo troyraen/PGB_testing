@@ -129,9 +129,10 @@ from google.cloud import bigquery
 import sncosmo
 import custommods.beam_helpers as bhelp
 
-# Get the data
+# Get some data
 PROJECTID = 'ardent-cycling-243415'
-input_bq_table = 'ztf_alerts.alerts'
+# input_bq_table = 'ztf_alerts.alerts'
+input_bq_table = 'dataflow_test.ztf_alerts'
 client = bigquery.Client()
 query = f'SELECT * FROM {PROJECTID}.{input_bq_table} LIMIT 100'
 query_job = client.query(query, project=PROJECTID)  #, job_config=config)
