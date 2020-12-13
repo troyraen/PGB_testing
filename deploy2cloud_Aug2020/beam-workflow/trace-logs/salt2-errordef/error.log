@@ -1,0 +1,5 @@
+Dataflow jobs 'test-ztf-exgal-ps-salt2' started Dec 12, 2020 at 6:36pm
+
+"Salt2 fit failed with RuntimeError for alertID 1438471434115015171. errordef is not one of the parameters []"
+
+5-10 similar errors; no successful Salt2 fits in the job.
