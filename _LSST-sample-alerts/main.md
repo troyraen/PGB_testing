@@ -236,6 +236,8 @@ gcloud compute ssh rubin-stream-simulator32 --project=ardent-cycling-243415 --zo
 source rass-venv/bin/activate # activate alert stream simulator env
 cd /home/troy_raen_pitt/alert-stream-simulator
 # if VM has been shut down since last run, update IP address in docker-compose.yml
+gcloud compute instances list # find ip address
+
 
 docker-compose up
 # "This will spin up several containers; once the log output dies down, the system should be up and running."
@@ -335,8 +337,8 @@ def subscribe_alerts(subscription_name, project_id, max_alerts=1):
 pgbenv
 cd ~/PGB_testing/_LSST-sample-alerts
 
-broker_host='34.70.184.212:9092'
-N_alerts=217
+broker_host='35.226.239.60:9092'
+N_alerts=21700
 bq_table='ardent-cycling-243415.rubin_sims.alerts' # optional
 # send bq_table if want to create a bq table from the last alert processed
 # doing so ensures the table exists with the proper schema
@@ -427,7 +429,10 @@ pip install lsst-alert-stream lsst-alert-packet
 <!-- fe ## Prereqs + GCP setup + alert schema -->
 
 <a name="HERE">LEFT OFF HERE</a>
-_rewrite rubin sim avros to GCS without stripping header. use the following code to try to read that file to see if it was written as a proper avro file._
+_need to create the BQ table with proper schema__.
+having trouble getting bq to read the avro file. Try re-writing the file with fastavro before storing to GCS.
+
+_use the following code to try to read that file to see if it was written as a proper avro file._
 
 __Load 1 alert, GCS -> BQ, so that table (with proper schema) is created__
 - _Use fastavro to write a uncompressed avro as a temp file, then upload that to BQ_
@@ -449,12 +454,17 @@ bucket = storage_client.get_bucket(f'{project_id}_{bucket_name}')
 blob = bucket.blob(gcs_fname)
 blob.download_to_filename(fname)
 
-# read with fastavro
-import fastavro as fa
-fa.is_avro(fname)  # this returns false
-with open(fname, 'rb') as fo:
-    for record in fa.reader(fo):
-        print(record)  # this doesn't work
+import lsst.alert.stream.serialization as lass
+with open(fname, 'rb') as alert_bytes:
+    print(alert_bytes)
+    alert_dict = lass.deserialize_alert(alert_bytes)
+
+# # read with fastavro
+# import fastavro as fa
+# fa.is_avro(fname)  # this returns false
+# with open(fname, 'rb') as fo:
+#     for record in fa.reader(fo):
+#         print(record)  # this doesn't work
 
 # check a ztf alert
 bucket_name = 'ztf_alert_avro_bucket'
@@ -469,7 +479,7 @@ fa.is_avro(fname)  # returns true
 
 
 __SAND__
-
+<!-- fs -->
 __Get alert schema for input to WriteToBigQuery().__
 
 Following 'Generate BQ schema from JSON file' link above.
@@ -594,7 +604,7 @@ ipython
 from fastavro.schema import load_schema
 
 ```
-
+<!-- fe sand -->
 
 <a name="dataflow-run"></a>
 ## Create and run job
@@ -605,22 +615,23 @@ Writing `rass-beam.py` by following/combining:
 
 __Run the job__
 ```bash
-gcloud compute ssh rubin-stream-simulator32 --project=ardent-cycling-243415 --zone=us-central1-a
-cd /home/troy_raen_pitt
-source dataflow-venv/bin/activate # activate alert stream simulator env
-# cd alert-stream-simulator # alerts are in data dir
+# gcloud compute ssh rubin-stream-simulator32 --project=ardent-cycling-243415 --zone=us-central1-a
+# cd /home/troy_raen_pitt
+# source dataflow-venv/bin/activate # activate alert stream simulator env
+# # cd alert-stream-simulator # alerts are in data dir
 
 # create the files to run the beam job
 # mkdir beam
 # cd beam
 # nano setup.py
 # nano rass-beam.py
+
 gcloud auth login
 cd ~/PGB_testing/_LSST-sample-alerts
 
 python -m rass-beam \
             --region us-central1 \
-            --setup_file /home/troy_raen_pitt/beam/setup.py \
+            --setup_file /home/troy_raen_pitt/PGB_testing/_LSST-sample-alerts/setup.py \
             --experiments use_runner_v2 \
             --streaming
 
