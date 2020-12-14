@@ -44,20 +44,33 @@ def publish_pubsub(alert_bytes):
     # del alert_dict['cutoutTemplate']
     # abytes = json.dumps(alert_dict).encode('utf-8')
     future = pubsub_client.publish(topic_path, data=alert_bytes)
+    return future
+# def publish_pubsub(alert_dict):
+#     abytes = json.dumps(alert_dict).encode('utf-8')
+#     future = pubsub_client.publish(topic_path, data=abytes)
+#     return future
 
 
 for i, raw_msg in enumerate(consumer):
     # extract alert
     alert_bytes = raw_msg.value
+    # extract data
     alert_dict = lass.deserialize_alert(alert_bytes)
+
+    # del alert_dict['cutoutDifference']
+    # del alert_dict['cutoutTemplate']
+    
+    # publish pubsub
+    # publish_pubsub(alert_bytes)
+    pubsub_client.publish(topic_path, data=alert_bytes)
+    
+    # store in bucket
     # strip the bytes header (alert is in confluent wire format)
     # see lsst.alert.stream.serialization.py
     alert_bytes = alert_bytes[5:]
-
     gcs_filename = f"{alert_dict['diaObject']['diaObjectId']}_{alert_dict['alertId']}.avro"
     store_in_bucket(alert_bytes, gcs_filename)
 
-    publish_pubsub(alert_bytes)
 
     if i==(N_alerts-1): break
 

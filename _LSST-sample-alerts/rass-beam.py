@@ -2,6 +2,7 @@
 # -*- coding: UTF-8 -*-
 
 import logging
+import json
 import apache_beam as beam
 # from apache_beam.io.kafka import ReadFromKafka
 from apache_beam.io.gcp.pubsub import ReadFromPubSub
@@ -9,9 +10,12 @@ from apache_beam.io.gcp.bigquery import WriteToBigQuery
 # from apache_beam.io import Write, WriteToBigQuery
 from apache_beam.io import BigQueryDisposition as bqd
 
+import lsst.alert.stream.serialization as lass
+
+
 # gcp resources
 PROJECTID = 'ardent-cycling-243415'
-dataflow_job_name = 'rubin-sims-read-from-avro'
+dataflow_job_name = 'rubin-sims-ps-bq'
 beam_bucket = 'ardent-cycling-243415_rubin-sims'
 output_bq_table = 'rubin_sims.alerts'
 topic_name = 'rubin-simulated-alerts'
@@ -33,7 +37,7 @@ options.view_as(beam.options.pipeline_options.StandardOptions).runner = 'Dataflo
 
 
 class log_alert_strip_header(beam.DoFn):
-    def start_batch():
+    def start_batch(self):
         import lsst.alert.stream.serialization
 
     def process(self, alert_bytes):
@@ -44,15 +48,26 @@ class log_alert_strip_header(beam.DoFn):
 
         return [alert_bytes[5:]]
 
+class extractAlertDict(beam.DoFn):
+    def process(self, alert_bytes):
+        """Expects that alert bytes were passed straight through from Kafka to PS"""
+        # """Expects that alert was in form of dict before converting to bytes for PS"""
+        # alert_dict = json.loads(alert_bytes.decode('utf-8')) 
+
+        alert_dict = lass.deserialize_alert(alert_bytes)
+        return [alert_dict]
+
+
 
 with beam.Pipeline(options=options) as bp:
     output = (
-        bp | 'Read alert Avro' >> ReadFromPubSub(subscription=topic_path)
-            | 'Log and strip header' >> beam.ParDo(log_alert_strip_header())
-            | 'Write to BQ' >> WriteToBigQuery(output_bq_table, project=PROJECTID,
-                                               schema='SCHEMA_AUTODETECT',
-                                               create_disposition=bqd.CREATE_IF_NEEDED,
-                                               write_disposition=bqd.WRITE_APPEND)
+        bp | 'ReadFromPubSub' >> ReadFromPubSub(subscription=topic_path)
+            # | 'Log and strip header' >> beam.ParDo(log_alert_strip_header())
+            | 'extractAlertDict' >> beam.ParDo(extractAlertDict())
+            | 'WriteToBigQuery' >> WriteToBigQuery(output_bq_table, project=PROJECTID,
+                                            #    schema='SCHEMA_AUTODETECT',
+                                               create_disposition=bqd.CREATE_NEVER,
+                                               write_disposition=bqd.WRITE_TRUNCATE)
             # salt2 + vizier?
     )
 
