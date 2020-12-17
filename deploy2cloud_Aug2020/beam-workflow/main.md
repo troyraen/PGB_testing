@@ -27,6 +27,7 @@ Rewriting the consumer into a Dataflow / Apache Beam job.
 - Dataflow
     - [Updating an existing pipeline](https://cloud.google.com/dataflow/docs/guides/updating-a-pipeline)
     - [Read AVRO messages from PubSub in Dataflow Python](https://stackoverflow.com/questions/61216075/read-avro-messages-from-pubsub-in-dataflow-python)
+- [Using Pub/Sub notifications for Cloud Storage](https://cloud.google.com/storage/docs/reporting-changes#gsutil)
 - ['kafkataxi' example](https://github.com/apache/beam/tree/master/sdks/python/apache_beam/examples/kafkataxi)
 - [alternate option, `beam_nuggets`](http://mohaseeb.com/beam-nuggets/beam_nuggets.io.kafkaio.html)
 - [`fastavro reader`](https://fastavro.readthedocs.io/en/latest/reader.html)
@@ -48,6 +49,28 @@ EXPORT ztf_keytab_path='pitt-reader.user.keytab'
 <a name="gcpsetup"></a>
 # Create GCP resources
 <!-- fs -->
+
+__Setup PubSub notifications on GCS bucket__
+- [Using Pub/Sub notifications for Cloud Storage](https://cloud.google.com/storage/docs/reporting-changes#gsutil)
+```bash
+BUCKET_NAME='ardent-cycling-243415_ztf_alert_avro_bucket'
+TOPIC_NAME='projects/ardent-cycling-243415/topics/ztf_alert_avro_bucket'
+# create the notifications -> PS
+gsutil notification create \
+            -t ${TOPIC_NAME} \
+            -e OBJECT_FINALIZE \
+            -f none \
+            gs://${BUCKET_NAME}
+
+# check the notifications on the bucket
+gsutil notification list gs://${BUCKET_NAME}
+
+# remove the notification
+CONFIGURATION_NAME=7  # get from list command above
+gsutil notification delete projects/_/buckets/${BUCKET_NAME}/notificationConfigs/${CONFIGURATION_NAME}
+```
+
+__Create other resources__
 ```python
 from google.cloud import pubsub_v1, bigquery, storage
 PROJECT_ID = 'ardent-cycling-243415'
