@@ -1,5 +1,35 @@
-# Alert Stream Broker Updates
+# Group Meeting Updates
 
+## Dec 18, 2020
+
+__Dark Matter in Stars Paper:__
+1. Submitted. Received reviewer comments.
+    - Resolved all comments but one... waiting to meet with Andrew
+2. Will resubmit as soon as I can resolve ^ with Andrew.
+
+__Alert Broker for ZTF and LSST:__
+1. Gave talk about our status at Rubin LSST Community Alert Broker Workshop
+2. Submitted proposal to be accepted as an LSST Community Alert Broker
+3. Broker software currently working:
+    - Receive/ingest live ZTF alerts
+    - Store: file in Cloud Storage; data in BigQuery database
+    - Filter for likely extragalactic transients
+        - Fit with Salt2. Store results in BigQuery (fit params) \& Cloud Storage (figure: lightcurve + Salt2 fit)
+    - Generate live message streams via Pub/Sub after each processing stage
+
+<img src="figures/pgb-current.png" alt="" width=""/>
+
+4. Next steps:
+    1. Work on Consumer: connection to ZTF is inconsistent/unstable
+        - Implement testing from a local machine (outside of broker software)
+        - Fix the connection (several options; newly discovered __Kafka -> Pub/Sub connector__)
+    2. Look into errors reported in the broker logs
+    3. Clean up the Beam pipeline code and submit a PR
+    4. Fix loading of alerts to BigQuery database. Currently dropping cutouts and all alerts that fail the initial upload attempt (mostly 1st detections)
+    5. Work on "Active Dev." items (cross matching and variable stars classifications)
+
+
+---
 ## Dec 4, 2020
 
 __Question:__
