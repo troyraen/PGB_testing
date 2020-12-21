@@ -7,7 +7,7 @@
 - [confluent_kafka API](https://docs.confluent.io/current/clients/confluent-kafka-python/#pythonclient-consumer)
 - [Kafka Python Client](https://docs.confluent.io/current/clients/python.html#)
 ---
-- [ZTF Alert Distribution System Status](https://monitor.alerts.ztf.uw.edu/) 
+- [ZTF Alert Distribution System Status](https://monitor.alerts.ztf.uw.edu/)
 - [ZTF Alert Archive - public](https://ztf.uw.edu/alerts/public/)
 ---
 
@@ -686,3 +686,13 @@ Email from ZTF people, forwarded by Daniel, says this is an Ubuntu-specific prob
 
 Later convo with Christopher Phillips, he said people he knows have abandoned try to use Conda with Kafka and are just installing directly.
 <!-- fe SASL error -->
+
+
+<a name="kafka-direct-install"></a>
+## Install Kafka directly (_not_ using Conda)
+<!-- fs -->
+Convo with Christopher Phillips, he said everyone he knows has abandoned try to use Conda with Kafka because it's buggy and are just installing directly.
+
+__See [kafka-setup-access.md](./kafka-setup-access.md)__
+
+<!-- fe Install Kafka directly (_not_ using Conda) -->

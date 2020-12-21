@@ -1,3 +1,9 @@
+- [GCP Console: Deployments](https://console.cloud.google.com/dm/deployments)
+- `gcloud beta compute ssh --zone "us-west3-c" "kafka-1-vm" --project "ardent-cycling-243415"`
+- `gcloud compute instances stop kafka-1-vm --zone us-west3-c`
+
+---
+
 # Kafka Install, Configuration, & Access
 
 - Install Kafka:
@@ -23,7 +29,7 @@
 
 
 <a name="gce-marketplace-install"></a>
-## Install on a Google Compute Engine VM using the prepackaged, "Click to Deploy" stack on the Google Marketplace
+## Install Kafka on a Google Compute Engine VM using the prepackaged, "Click to Deploy" stack on the Google Marketplace
 <!-- fs -->
 
 1. Go to the [Kafka, Click to Deploy stack on Google Marketplace](https://console.cloud.google.com/marketplace/product/click-to-deploy-images/kafka?q=kafka&id=f19a0f63-fc57-47fd-9d94-8d5ca6af935e&project=ardent-cycling-243415&folder=&organizationId=)
@@ -40,8 +46,10 @@ sudo systemctl restart kafka
 
 `ssh` into the VM from the GCP Console Deployments or VM instances pages, or the following:
 ```bash
-
+gcloud beta compute ssh --zone "us-west3-c" "kafka-1-vm" --project "ardent-cycling-243415"
 ```
+
+Set `JAVA_HOME` env variable following instructions in doc linked in previous section.
 
 _[ToDo:] Create an "image" or a "machine image" of this VM and figure out how to use it to deploy a new ZTF consumer daily._
 
@@ -50,6 +58,11 @@ _[ToDo:] Create an "image" or a "machine image" of this VM and figure out how to
 <a name="config"></a>
 ## Configure Kafka for ZTF access
 <!-- fs -->
+Following instructions:
+- [Kafka Consumer Configs](https://kafka.apache.org/documentation/#consumerconfigs)
+- [SASL configuration for Kafka Clients](https://docs.confluent.io/3.0.0/kafka/sasl.html#sasl-configuration-for-kafka-clients)
+- [Confluent Kafka Consumer](https://docs.confluent.io/platform/current/clients/consumer.html)
+- info I got from Christopher Phillips over phone/email.
 
 1. Find out where Kafka is installed.
 On the VM using Marketplace, it is in `/opt/kafka`.
@@ -57,125 +70,74 @@ Otherwise, try `/etc/kafka`.
 The following assumes we are on the VM using the Marketplace stack.
 
 2. This requires two authorization files:
-    1. `krb5.conf`, which should be at `/opt/krb5.conf`
-    2. `pitt-reader.user.keytab`. I store this in the directory `~/consume-ztf`; we need the path for config below.
+    1. `krb5.conf`, which should be at `/etc/krb5.conf`
+    2. `pitt-reader.user.keytab`. I store this in the directory `/home/troy_raen_pitt/consume-ztf`; we need the path for config below.
 
-3. Create `/opt/kafka_client_jaas.conf ` containing:
-
+3. Create `/opt/kafka/kafka_client_jaas.conf ` containing:
 ```
 KafkaClient {
-com.sun.security.auth.module.Krb5LoginModule required 
-useKeyTab=true 
-storeKeyTab=true 
-debug=true
-serviceName="kafka" 
-keyTab="~/consume-ztf/pitt-reader.user.keytab" 
-principal="mirrormaker/public2.alerts.ztf.uw.edu@KAFKA.SECURE" 
-useTicketCache=false; 
+    com.sun.security.auth.module.Krb5LoginModule required 
+    useKeyTab=true 
+    storeKeyTab=true 
+    debug=true
+    serviceName="kafka" 
+    keyTab="/home/troy_raen_pitt/consume-ztf/pitt-reader.user.keytab" 
+    principal="pitt-reader@KAFKA.SECURE" 
+    useTicketCache=false; 
 };
 ```
 
-4. ~Run java command to set environ variable~
+Note: original instructions from Christopher said to use
+`principal="mirrormaker/public2.alerts.ztf.uw.edu@KAFKA.SECURE" `,
+but when I used that, running the console consumer (below) => complained of being asked for a password. [This answer](https://help.mulesoft.com/s/article/javax-security-auth-login-LoginException-Could-not-login-the-client-is-being-asked-for-a-password) led me to look at this `prinicpal` line and compare it to the consumer config, which has `sasl.kerberos.principal=pitt-reader@KAFKA.SECURE`. Changing the above to match.
 
-<!-- Instead of doing this, I had to put the path in `consumer.properties` (below). -->
 
+4. Run java command to set environ variable
 ```bash
-export KAFKA_OPTS="-Djava.security.auth.login.config=/opt/kafka_client_jaas.conf "
-  # -Djava.security.krb5.conf=/opt/krb5.conf"
- # -javaagent:/opt/jmx_exporter/jmx_prometheus_javaagent.jar=private:8080:/etc/jmx_exporter/kafka.yml'
-
-  -Djava.security.krb5.conf=/etc/krb5.conf
-
-# KAFKA_OPTS=java.security.auth.login.config=/opt/kafka_client_jaas.conf 
-# System.setProperty("java.security.auth.login.config","/opt/kafka_client_jaas.conf ")
-
+export KAFKA_OPTS="-Djava.security.auth.login.config=/opt/kafka/kafka_client_jaas.conf "
 ```
 
 
-4. Setup the Kafka config file `consumer.properties`.
-Sample config files are provided with the installation in `/opt/kafka/config`.
-Copy `consumer.properties` into a dir you want to work in.
+5. Setup the Kafka config file `consumer.properties`.
+Sample config files are provided with the installation in `/opt/kafka/config/`.
+Copy `consumer.properties` into a dir you want to work in (the following uses `/home/troy_raen_pitt/consume-ztf/`).
 Edit/add the following parameters:
-
 ```bash
 bootstrap.servers=public2.alerts.ztf.uw.edu:9094
 group.id=group
 session.timeout.ms=6000
 enable.auto.commit=False
-sasl.kerberos.kinit.cmd='kinit -t "%{sasl.kerberos.keytab}" -k %{sasl.kerberos.principal}',
+sasl.kerberos.kinit.cmd='kinit -t "%{sasl.kerberos.keytab}" -k %{sasl.kerberos.principal}'
 sasl.kerberos.service.name=kafka
 security.protocol=SASL_PLAINTEXT
-sasl.mechanisms=GSSAPI
+sasl.mechanism=GSSAPI
 auto.offset.reset=earliest
-sasl.kerberos.principal=pitt-reader@KAFKA.SECURE
-sasl.kerberos.keytab=~/consume-ztf/pitt-reader.user.keytab  # THIS MUST POINT AT YOUR KEYTAB AUTHORIZATION FILE
-# sasl.jaas.config=/opt/kafka_client_jaas.conf  # THIS MUST POINT AT THE FILE CREATED ABOVE
 ```
-
 
 <!-- fe Configure Kafka for ZTF access  -->
 
 <a name="run-consumer"></a>
 ## Run the Kafka Consumer
 <!-- fs -->
-The following assumes we are on the VM using the Marketplace stack.
-Kafka is installed at `/opt/kafka` (otherwise, look in `/etc/kafka`)
+The following assumes we are using the VM set up with the Marketplace stack.
+
+`ssh` into the machine:
+```bash
+gcloud beta compute ssh --zone "us-west3-c" "kafka-1-vm" --project "ardent-cycling-243415"
+```
+
+Kafka is installed at `/opt/kafka` (on a different machine, look in `/etc/kafka`)
 
 ```bash
+export KAFKA_OPTS="-Djava.security.auth.login.config=/opt/kafka/kafka_client_jaas.conf "
 cd /opt/kafka/bin
-./kafka-console-consumer.sh --bootstrap-server public2.alerts.ztf.uw.edu:9094 --topic ztf_20201018_programid1 --consumer.config ~/consume-ztf/consumer.properties
+
+topicday=20201018
+./kafka-console-consumer.sh --bootstrap-server public2.alerts.ztf.uw.edu:9094 --topic ztf_${topicday}_programid1 --consumer.config /home/troy_raen_pitt/consume-ztf/consumer.properties
 # final argument should point to the consumer.properties file created above
 ```
 
-This gives the error:
-```bash
-troy_raen_pitt@kafka-1-vm:/opt/kafka/bin$ ./kafka-console-consumer.sh --bootstrap-server public2.alerts.ztf.u
-w.edu:9094 --topic ztf_20201018_programid1 --consumer.config ~/consume-ztf/consumer.properties
-Debug is  true storeKey false useTicketCache false useKeyTab true doNotPrompt false ticketCache is null isIni
-tiator true KeyTab is ~/consume-ztf/pitt-reader.user.keytab refreshKrb5Config is false principal is mirrormak
-er/public2.alerts.ztf.uw.edu@KAFKA.SECURE tryFirstPass is false useFirstPass is false storePass is false clea
-rPass is false
-Key for the principal mirrormaker/public2.alerts.ztf.uw.edu@KAFKA.SECURE not available in ~/consume-ztf/pitt-
-reader.user.keytab
-                [Krb5LoginModule] authentication failed
-Could not login: the client is being asked for a password, but the Kafka client code does not currently suppo
-rt obtaining a password from the user. not available to garner  authentication information from the user
-[2020-12-19 06:20:04,683] ERROR Unknown error when running consumer:  (kafka.tools.ConsoleConsumer$)
-org.apache.kafka.common.KafkaException: Failed to construct kafka consumer
-        at org.apache.kafka.clients.consumer.KafkaConsumer.<init>(KafkaConsumer.java:825)
-        at org.apache.kafka.clients.consumer.KafkaConsumer.<init>(KafkaConsumer.java:666)
-        at kafka.tools.ConsoleConsumer$.run(ConsoleConsumer.scala:67)
-        at kafka.tools.ConsoleConsumer$.main(ConsoleConsumer.scala:54)
-        at kafka.tools.ConsoleConsumer.main(ConsoleConsumer.scala)
-Caused by: org.apache.kafka.common.KafkaException: javax.security.auth.login.LoginException: Could not login: the client is being asked for a password, but the Kafka client code does not currently support obtaining a password from the user. not available to garner  authentication information from the user
-        at org.apache.kafka.common.network.SaslChannelBuilder.configure(SaslChannelBuilder.java:172)
-        at org.apache.kafka.common.network.ChannelBuilders.create(ChannelBuilders.java:157)
-        at org.apache.kafka.common.network.ChannelBuilders.clientChannelBuilder(ChannelBuilders.java:73)
-        at org.apache.kafka.clients.ClientUtils.createChannelBuilder(ClientUtils.java:105)
-        at org.apache.kafka.clients.consumer.KafkaConsumer.<init>(KafkaConsumer.java:743)
-        ... 4 more
-Caused by: javax.security.auth.login.LoginException: Could not login: the client is being asked for a password, but the Kafka client code does not currently support obtaining a password from the user. not available to garner  authentication information from the user
-        at com.sun.security.auth.module.Krb5LoginModule.promptForPass(Krb5LoginModule.java:944)
-        at com.sun.security.auth.module.Krb5LoginModule.attemptAuthentication(Krb5LoginModule.java:764)
-        at com.sun.security.auth.module.Krb5LoginModule.login(Krb5LoginModule.java:618)
-        at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
-        at sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
-        at sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
-        at java.lang.reflect.Method.invoke(Method.java:498)
-        at javax.security.auth.login.LoginContext.invoke(LoginContext.java:755)
-        at javax.security.auth.login.LoginContext.access$000(LoginContext.java:195)
-        at javax.security.auth.login.LoginContext$4.run(LoginContext.java:682)
-        at javax.security.auth.login.LoginContext$4.run(LoginContext.java:680)
-        at java.security.AccessController.doPrivileged(Native Method)
-        at javax.security.auth.login.LoginContext.invokePriv(LoginContext.java:680)
-        at javax.security.auth.login.LoginContext.login(LoginContext.java:587)
-        at org.apache.kafka.common.security.authenticator.AbstractLogin.login(AbstractLogin.java:60)
-        at org.apache.kafka.common.security.kerberos.KerberosLogin.login(KerberosLogin.java:103)
-        at org.apache.kafka.common.security.authenticator.LoginManager.<init>(LoginManager.java:62)
-        at org.apache.kafka.common.security.authenticator.LoginManager.acquireLoginManager(LoginManager.java:112)
-        at org.apache.kafka.common.network.SaslChannelBuilder.configure(SaslChannelBuilder.java:158)
-        ... 8 more
-troy_raen_pitt@kafka-1-vm:/opt/kafka/bin$
-```
+If I pass an incorrect topic, I get an error saying I don't have access to that topic.
+If I pass a correct topic, it _seems_ to work, but hangs without printing out an alert msg.
 
 <!-- fe Run the Kafka Consumer -->
