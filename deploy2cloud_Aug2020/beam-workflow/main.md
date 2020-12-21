@@ -131,8 +131,9 @@ python -m ztf-beam \
 
 <!-- fe Create and Run Beam -->
 
-# Sand
 
+# Sand
+<!-- fs -->
 __ZTF msg data -> dict__
 ```python
 # first, get a ztf alert using notebook code.
@@ -159,3 +160,5 @@ with SpooledTemporaryFile(max_size=maxsize, mode='w+b') as temp_file:
     r = temp_file.read()
 r.decode("utf-8")
 ```
+
+<!-- fe Sand -->

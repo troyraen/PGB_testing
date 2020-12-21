@@ -7,6 +7,7 @@
 - [confluent_kafka API](https://docs.confluent.io/current/clients/confluent-kafka-python/#pythonclient-consumer)
 - [Kafka Python Client](https://docs.confluent.io/current/clients/python.html#)
 ---
+- [ZTF Alert Distribution System Status](https://monitor.alerts.ztf.uw.edu/) 
 - [ZTF Alert Archive - public](https://ztf.uw.edu/alerts/public/)
 ---
 
@@ -14,7 +15,7 @@
 
 __Deploy today's broker__
 ```bash
-monthday=dec11
+monthday=dec15
 gcloud compute instances create-with-container consume-ztf-${monthday} --zone=us-central1-a --machine-type=n1-standard-1 --image-project=cos-cloud --container-image=gcr.io/ardent-cycling-243415/consume_ztf_today:tag1117a --labels=env=consume-ztf --image-family=cos-stable --service-account=591409139500-compute@developer.gserviceaccount.com --scopes=cloud-platform
 ```
 
@@ -36,9 +37,8 @@ year='2020'
 ./stopConsumer_loadBQ.sh ${day} ${month} ${monthname} ${year}
 ```
 
-# Outline
+# ToC
 - [Pre-meeting To do list](#pretodo)
-- [Fixing issues](#fix)
 - [To do list](#todo)
 - [Status check](#status)
     - [Set up environment](#envsetup)
@@ -51,6 +51,21 @@ year='2020'
     - [Manual load GCS -> BQ](#manualGCS2BQ)
     - [Download an alert from GCS bucket](#dld-from-gcs)
     - [Manually trigger startInstancePubSub](#triggervm)
+- [Fixing issues](#fix) (Kafka consumer ingestion is buggy)
+    - [x]  [Docker login](#dockerlogin)
+    - [x]  [Cloud Shell](#envsetup)
+    - [x]  fixed paths (copy auth files) in Dockerfile
+    - [x]  [fixed IAM permissions (Service Account Credentials)](#svccreds)
+    - [x]  [SASL error](#sasl)
+    - [x]  `msg = self.consume(num_messages=1, timeout=5)[0]` `"IndexError: list index out of range`. Solution: ZTF reset Kafka ofsets + we now use `self.poll()` instead of `self.consume()`
+        - [Test whether can connect to Kafka stream using code from notebooks/ztf-auth-test.ipynb](#testkafkaconnection)
+    - [ ]  [broker VM instance runs once but does not restart](#startinstance). May be related to Node.js 8 error in to-do list above.
+    - [x]  Changed VM machine type to `g1-small` because resources were over-utilized
+    - [ ]  [Consumer ingests for awhile, then just stops](#ingestionstops)
+        - [ ]  [Restting Kafka consumer offsets](#offsets)
+    - [ ]  `GCS_to_BQ` streaming rate limit exceeded ([quotas](https://cloud.google.com/bigquery/quotas#streaming_inserts), [table limits](https://cloud.google.com/bigquery/quotas#standard_tables))
+    - [ ]  [Install Kafka directly (_not_ using Conda)](#kafka-direct-install)
+
 
 <a name="pretodo"></a>
 # Pre-meeting To do list
@@ -58,22 +73,6 @@ year='2020'
 - [ ]  are readthedocs up to date?
     - [ ]  alert_ingestion.rst
 - [ ]  pull request conflict file `broker/alert_ingestion/GCS_to_BQ/main.py`
-
-
-<a name="fix"></a>
-# Fixing issues:
-- [x]  [Docker login](#dockerlogin)
-- [x]  [Cloud Shell](#envsetup)
-- [x]  fixed paths (copy auth files) in Dockerfile
-- [x]  [fixed IAM permissions (Service Account Credentials)](#svccreds)
-- [x]  [SASL error](#sasl)
-- [x]  `msg = self.consume(num_messages=1, timeout=5)[0]` `"IndexError: list index out of range`. Solution: ZTF reset Kafka ofsets + we now use `self.poll()` instead of `self.consume()`
-    - [Test whether can connect to Kafka stream using code from notebooks/ztf-auth-test.ipynb](#testkafkaconnection)
-- [ ]  [broker VM instance runs once but does not restart](#startinstance). May be related to Node.js 8 error in to-do list above.
-- [x]  Changed VM machine type to `g1-small` because resources were over-utilized
-- [ ]  [Consumer ingests for awhile, then just stops](#ingestionstops)
-    - [ ]  [Restting Kafka consumer offsets](#offsets)
-- [ ]  `GCS_to_BQ` streaming rate limit exceeded ([quotas](https://cloud.google.com/bigquery/quotas#streaming_inserts), [table limits](https://cloud.google.com/bigquery/quotas#standard_tables))
 
 
 <a name="todo"></a>
@@ -408,11 +407,15 @@ Logged in (SSH) to `consume-ztf-2` (which I don't think I've altered since tryin
 <!-- fe Helpful GCP tasks -->
 
 ---
-# Attempts to fix various things
+<a name="fix"></a>
+# Attempts to fix various things (Kafka consumer ingestion is buggy)
+
+Biggest issue is that consumer sometimes just can't/won't receive alerts.
+Call to `consumer.poll()` just timeout, returns `None`.
 
 
 <a name="ingestionstops"></a>
-### Consumer ingests for awhile, then just stops
+## Consumer ingests for awhile, then just stops
 <!-- fs -->
 See, e.g.,
 - machine id 5597883590625052742
@@ -425,7 +428,7 @@ Confirmed I was able to get alerts from today's topic (ztf_20201110_programid1).
 <!-- fe Consumer ingests for awhile, then just stops -->
 
 <a name="offsets"></a>
-### Restting Kafka consumer offsets
+## Restting Kafka consumer offsets
 <!-- fs -->
 - [confluent-kafka Consumer Read the Docs](https://docs.confluent.io/current/clients/confluent-kafka-python/#consumer)
 - [Consumer config dict options](https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md)
@@ -489,7 +492,7 @@ finally:
 
 
 <a name="">startinstance</a>
-### Stop/Start compute instance not working properly
+## Stop/Start compute instance not working properly
 <!-- fs -->
 Trying to make this process work: https://cloud.google.com/scheduler/docs/start-and-stop-compute-engine-instances-on-a-schedule
 
@@ -515,7 +518,7 @@ gcloud functions call startInstancePubSub --data '{"data":"eyJ6b25lIjoidXMtY2Vud
 
 
 <a name="testkafkaconnection"></a>
-### Test whether can connect to Kafka stream using code from notebooks/ztf-auth-test.ipynb
+## Test whether can connect to Kafka stream using code from notebooks/ztf-auth-test.ipynb
 <!-- fs -->
 ```python
 # conda activate pgb2, on Roy
@@ -582,7 +585,7 @@ finally:
 <!-- fe # Test whether can connect to Kafka stream using code from notebooks/ztf-auth-test.ipynb -->
 
 <a name="pykafka"></a>
-### Using PyKafka
+## Using PyKafka
 <!-- fs -->
 - [PyKafka](https://pykafka.readthedocs.io/en/latest/index.html)
 - Also see "Writing your own consumer" at the bottom of [Alert stream simulator](https://github.com/lsst-dm/alert-stream-simulator/)
@@ -603,12 +606,13 @@ config = SslConfig( cafile='pitt-reader@KAFKA.SECURE',
 client = KafkaClient(hosts="public2.alerts.ztf.uw.edu:9094", ssl_config=config)
 ```
 
-This will not work because PyKafka does not provide SASL support.
+_This will not work because PyKafka does not provide SASL support._
+
 <!-- fe Using PyKafka -->
 
 
 <a name="svccreds"></a>
-### Service Account Credentials (8/17/20)
+## Service Account Credentials (8/17/20)
 <!-- fs -->
 Following instructions [here](https://cloud.google.com/compute/docs/access/create-enable-service-accounts-for-instances).
 
@@ -629,7 +633,7 @@ It is unclear to me whether this will cause authentication problems for other pa
 
 
 <a name="dockerlogin"></a>
-### docker login
+## docker login
 <!-- fs -->
 May need to do `gcloud auth configure-docker`, see [this help page](https://cloud.google.com/sdk/gcloud/reference/auth/configure-docker). Configuration may already be set up in Google Cloud Shell. Log into that and try it.
 
@@ -673,7 +677,7 @@ Added project editor IAM permissions to compute default account. Now it seems to
 <!-- fe docker login -->
 
 <a name="sasl"></a>
-### SASL error
+## SASL error
 <!-- fs -->
 getting error
 `cimpl.KafkaException: KafkaError{code=_INVALID_ARG,val=-186,str="Failed to create consumer: No provider for SASL mechanism GSSAPI: recompile librdkafka with libsasl2 or openssl support. Current build options: PLAIN SASL_SCRAM OAUTHBEARER"}`
