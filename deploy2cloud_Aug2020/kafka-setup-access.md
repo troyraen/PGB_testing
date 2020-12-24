@@ -1,36 +1,76 @@
 - [GCP Console: Deployments](https://console.cloud.google.com/dm/deployments)
-- `gcloud beta compute ssh --zone "us-west3-c" "kafka-1-vm" --project "ardent-cycling-243415"`
-- `gcloud compute instances stop kafka-1-vm --zone us-west3-c`
+- Server configured as detailed below: `name=kafka-1-vm`
+    - `gcloud beta compute ssh ${name} --zone us-west3-c`
+    - `gcloud compute instances stop ${name} --zone us-west3-c`
 
 ---
 
-# Kafka Install, Configuration, & Access
-
-- Install Kafka:
+# ToC
+- [Install Kafka](#install)
     - [on a local machine.](#local-install)
-    - [on a Google Compute Engine VM using the prepackaged, "Click to Deploy" stack the Google Marketplace.](#gce-marketplace-install)
-- [Configure Kafka for ZTF access.](#config)
-- [Run the Kafka Consumer](#run-consumer)
-- Access the GCE VM Kafka server I've set up for testing purposes.
-
+    - [on a Compute Engine VM](#gce-install)
+    - [on a Compute Engine VM using the prepackaged, "Google Click to Deploy" stack the Google Marketplace.](#gce-marketplace-install)
+- [Console Consumer](#cons-consumer) (useful for testing the connection)
+    - [Configure Kafka for ZTF access.](#config)
+    - [Run the Kafka Console Consumer](#run-consumer)
+- [Kafka Connectors](#connectors)
+    - [Pub/Sub Connector](#psconnect)
+        - [Install and Configure](#psconnect-config)
+        - [__Run the Pub/Sub Connector__](#psconnect-run)
 ---
 
+<a name="install"></a>
+# Install Kafka
+<!-- fs -->
 <a name="local-install"></a>
-## Install Kafka on a local machine
+## Install Kafka (actually, Confluent Platform) on a local machine
 <!-- fs -->
 
-1. Install the `Java Development Kit (JDK)`. Debian 10 instructions are [here](https://www.digitalocean.com/community/tutorials/how-to-install-java-with-apt-on-debian-10). From that page you can select different versions or distributions.
+1. Install `Java` and the `Java Development Kit (JDK)`. Debian 10 instructions are [here](https://www.digitalocean.com/community/tutorials/how-to-install-java-with-apt-on-debian-10) (I used the "Default" `OpenJDK` option). From that page you can select different versions or distributions.
     - Be sure to set the `JAVA_HOME` environment variable; instructions at the bottom of the page linked above.
 
 2. Install the `Confluent Platform`. Follow the instructions in the "Get the Software" section of [this page](https://docs.confluent.io/platform/current/installation/installing_cp/deb-ubuntu.html). Those instructions are for Ubuntu and Debian.See links on LHS of the page for RHEL, CentOS, or Docker installs.
-    - Note that we really only need the `Kafka` package, but I wasn't able to get that to install by itself, so I just installed the entire platform (likely just user error, but I didn't spend much time tracking it down). Entire platform includes (e.g.,) ZooKeeper, which is only needed for Publishers, not Consumers.
+    - Note that the consumer really only needs the `Kafka` package. `Confluent Platform` provides/supports additional tools, though I don't think we will need to use any of them.
 
 <!-- fe Install and configure Kafka on a local machine -->
 
 
+<a name="gce-install"></a>
+## Install Kafka (actually, Confluent Platform) on a Compute Engine VM
+<!-- fs -->
+
+1. Create the VM instance (Debian 10):
+
+```bash
+instancename=kafka-consumer
+machinetype=e2-standard-4
+CEserviceaccount=591409139500-compute@developer.gserviceaccount.com
+zone=us-central1-a
+
+gcloud compute instances create ${instancename} \
+    --zone=${zone} \
+    --machine-type=${machinetype} \
+    --service-account=${CEserviceaccount} \
+    --scopes=cloud-platform \
+    --metadata=google-logging-enabled=true \
+    --tags=kafka-server # for the firewall rule
+```
+
+2. `ssh` into the instance:
+
+```bash
+gcloud compute ssh ${instancename} --zone=${zone}
+```
+
+3. Install Java and Confluent Platform by following the [local machine install instructions](#local-install) (above).
+
+<!-- fe  -->
+
 <a name="gce-marketplace-install"></a>
 ## Install Kafka on a Google Compute Engine VM using the prepackaged, "Click to Deploy" stack on the Google Marketplace
 <!-- fs -->
+Note: this does _not_ install `Confluent Platform` (it _does_ install some of the components) and
+so it cannot be used with `Confluent Hub` which manages connectors (below).
 
 1. Go to the [Kafka, Click to Deploy stack on Google Marketplace](https://console.cloud.google.com/marketplace/product/click-to-deploy-images/kafka?q=kafka&id=f19a0f63-fc57-47fd-9d94-8d5ca6af935e&project=ardent-cycling-243415&folder=&organizationId=)
 2. Click "Launch", fill in VM configuration info
@@ -54,7 +94,11 @@ Set `JAVA_HOME` env variable following instructions in doc linked in previous se
 _[ToDo:] Create an "image" or a "machine image" of this VM and figure out how to use it to deploy a new ZTF consumer daily._
 
 <!-- fe # Install on a Google Compute Engine VM -->
+<!-- fe Install Kafka -->
 
+<a name="cons-consumer"></a>
+# Console Consumer
+<!-- fs -->
 <a name="config"></a>
 ## Configure Kafka for ZTF access
 <!-- fs -->
@@ -66,14 +110,18 @@ Following instructions:
 
 1. Find out where Kafka is installed.
 On the VM using Marketplace, it is in `/opt/kafka`.
-Otherwise, try `/etc/kafka`.
-The following assumes we are on the VM using the Marketplace stack.
+On the VM using manual install of Confluent Platform, components are scattered around a bit; look in:
+    - `/etc/kafka` (example properties and config files)
+    - `/bin` (e.g., for `kafka-console-consumer` and `confluent-hub`)
+The following assumes we are on the VM using manual install of Confluent Platform.
+
+2. Create a working directory. In the following I use `/home/troy_raen_pitt/consume-ztf`
 
 2. This requires two authorization files:
     1. `krb5.conf`, which should be at `/etc/krb5.conf`
     2. `pitt-reader.user.keytab`. I store this in the directory `/home/troy_raen_pitt/consume-ztf`; we need the path for config below.
 
-3. Create `/opt/kafka/kafka_client_jaas.conf ` containing:
+3. Create `kafka_client_jaas.conf ` in your working directory containing (change the `keyTab` path if needed):
 ```
 KafkaClient {
     com.sun.security.auth.module.Krb5LoginModule required 
@@ -92,15 +140,15 @@ Note: original instructions from Christopher said to use
 but when I used that, running the console consumer (below) => complained of being asked for a password. [This answer](https://help.mulesoft.com/s/article/javax-security-auth-login-LoginException-Could-not-login-the-client-is-being-asked-for-a-password) led me to look at this `prinicpal` line and compare it to the consumer config, which has `sasl.kerberos.principal=pitt-reader@KAFKA.SECURE`. Changing the above to match.
 
 
-4. Run java command to set environ variable
+4. Run java command to set an environment variable for the file you just created:
 ```bash
-export KAFKA_OPTS="-Djava.security.auth.login.config=/opt/kafka/kafka_client_jaas.conf "
+export KAFKA_OPTS="-Djava.security.auth.login.config=/home/troy_raen_pitt/consume-ztf/kafka_client_jaas.conf"
 ```
 
 
 5. Setup the Kafka config file `consumer.properties`.
-Sample config files are provided with the installation in `/opt/kafka/config/`.
-Copy `consumer.properties` into a dir you want to work in (the following uses `/home/troy_raen_pitt/consume-ztf/`).
+Sample config files are provided with the installation in `/opt/kafka/config/` (Marketplace VM) or `/etc/kafka/` on the manual install VM.
+Copy `consumer.properties` into your working directory.
 Edit/add the following parameters:
 ```bash
 bootstrap.servers=public2.alerts.ztf.uw.edu:9094
@@ -117,27 +165,192 @@ auto.offset.reset=earliest
 <!-- fe Configure Kafka for ZTF access  -->
 
 <a name="run-consumer"></a>
-## Run the Kafka Consumer
+## Run the Kafka Console Consumer
 <!-- fs -->
-The following assumes we are using the VM set up with the Marketplace stack.
+The following assumes we are using the manual install VM.
 
 `ssh` into the machine:
 ```bash
-gcloud beta compute ssh --zone "us-west3-c" "kafka-1-vm" --project "ardent-cycling-243415"
+gcloud beta compute ssh kafka-consumer --zone us-central1-a
 ```
 
-Kafka is installed at `/opt/kafka` (on a different machine, look in `/etc/kafka`)
-
+Set environment variables and test with the console consumer
 ```bash
-export KAFKA_OPTS="-Djava.security.auth.login.config=/opt/kafka/kafka_client_jaas.conf "
-cd /opt/kafka/bin
+export KAFKA_OPTS="-Djava.security.auth.login.config=/home/troy_raen_pitt/consume-ztf/kafka_client_jaas.conf"
 
-topicday=20201018
-./kafka-console-consumer.sh --bootstrap-server public2.alerts.ztf.uw.edu:9094 --topic ztf_${topicday}_programid1 --consumer.config /home/troy_raen_pitt/consume-ztf/consumer.properties
+cd /bin
+
+topicday=20201223
+./kafka-console-consumer --bootstrap-server public2.alerts.ztf.uw.edu:9094 --topic ztf_${topicday}_programid1 --consumer.config /home/troy_raen_pitt/consume-ztf/consumer.properties
 # final argument should point to the consumer.properties file created above
 ```
 
-If I pass an incorrect topic, I get an error saying I don't have access to that topic.
-If I pass a correct topic, it _seems_ to work, but hangs without printing out an alert msg.
+After a few moments, if the connection is successful you will see encoded alerts printing to `stdout`.
+Use `control-C` to stop consuming.
 
 <!-- fe Run the Kafka Consumer -->
+<!-- fe Console Consumer -->
+
+<a name="connectors"></a>
+# Kafka Connectors
+<!-- fs -->
+Note: the connector will manage the Kafka consumer;
+we do not need to instantiate a consumer separately.
+
+- [Getting Started with Kafka Connect](https://docs.confluent.io/home/connect/userguide.html)
+
+1. Create a directory to store the connectors:
+```bash
+mkdir /usr/local/share/kafka/connectors
+```
+
+2. To use connectors stored here, the `.properties` file called when running the connect must include the following:
+```bash
+plugin.path=/usr/local/share/kafka/connectors
+```
+
+3. Create a working directory. In the following I use `/home/troy_raen_pitt/consume-ztf`
+
+4. Two authorization files are required:
+    1. `krb5.conf`, which should be at `/etc/krb5.conf`
+    2. `pitt-reader.user.keytab`. I store this in the directory `/home/troy_raen_pitt/consume-ztf`; we need the path for config below.
+
+
+<!-- fe Kafka Connectors main -->
+
+<a name="psconnect"></a>
+## Pub/Sub Connector
+<!-- fs -->
+Note: there is another connector (separate from the one we use below) managed by Confluent, available [here](https://www.confluent.io/hub/confluentinc/kafka-connect-gcp-pubsub), but it only supports a Pub/Sub _source_ (i.e., Pub/Sub -> Kafka) which is opposite of what we need.
+
+<a name="psconnect-config"></a>
+### Install and Configure
+<!-- fs -->
+__Install__ Pub/Sub's [kafka-connector](https://github.com/GoogleCloudPlatform/pubsub/tree/master/kafka-connector).
+I pieced the following together from:
+- [Getting Started with Kafka Connect](https://docs.confluent.io/home/connect/userguide.html)
+- the `copy_tool.py` file provided with the `kafka-connector`
+
+```bash
+# navigate to the directory created above to store connectors
+cd /usr/local/share/kafka/connectors
+# download the .jar file
+CONNECTOR_RELEASE=v0.5-alpha
+sudo wget https://github.com/GoogleCloudPlatform/pubsub/releases/download/${CONNECTOR_RELEASE}/pubsub-kafka-connector.jar
+```
+
+__Configure__
+<!-- - [Kafka Connect Config options](http://kafka.apache.org/documentation.html#connectconfigs) -->
+<!-- - [Running Kafka Connect](http://kafka.apache.org/documentation.html#connect_running) -->
+<!-- - `/usr/share/confluent-hub-components/confluentinc-kafka-connect-gcp-pubsub/etc/google-pubsub-quickstart.properties` -->
+<!-- - [Example `cps-sink-connector.properties`](https://github.com/GoogleCloudPlatform/pubsub/blob/master/kafka-connector/config/cps-sink-connector.properties) -->
+
+- [Configuring and Running Workers](https://docs.confluent.io/home/connect/userguide.html#configuring-and-running-workers)
+
+The connector can be configured to run in "standalone" or "distributed" mode.
+Distributed is recommended for production environments, partly due to its fault tolerance.
+Tried distributed;
+confused about whether all settings go in one file;
+not totally clear on what the distributed-specific worker options are/what they do;
+starting with standalone mode for the following:
+
+__Worker configuration__
+- [Worker Configuration Properties](https://docs.confluent.io/platform/current/connect/references/allconfigs.html)
+    - [Configuring Key and Value Converters](https://docs.confluent.io/home/connect/userguide.html#connect-configuring-converters)
+    - [Configuring GSSAPI: Kafka Connect](https://docs.confluent.io/platform/current/kafka/authentication_sasl/authentication_sasl_gssapi.html#kconnect-long)
+    - [Consumer Overrides](https://docs.confluent.io/home/connect/userguide.html#producer-and-consumer-overrides)
+- See the example config files at
+    - `/etc/kafka/connect-standalone.properties`
+    - `/etc/kafka/connect-distributed.properties`
+
+```bash
+# navigate to the working directory created when configuring Kafka for ZTF
+cd /home/troy_raen_pitt/consume-ztf
+```
+
+Create a file called `psconnect-worker.properties` containing the following:
+```bash
+plugin.path=/usr/local/share/kafka/connectors
+# ByteArrayConverter provides a “pass-through” option that does no conversion
+key.converter=org.apache.kafka.connect.converters.ByteArrayConverter
+value.converter=org.apache.kafka.connect.converters.ByteArrayConverter
+# key.converter.schemas.enable=false
+# value.converter.schemas.enable=false
+offset.storage.file.filename=/tmp/connect.offsets
+# Flush much faster than normal, which is useful for testing/debugging
+# offset.flush.interval.ms=10000
+
+# workers need to use SASL
+sasl.mechanism=GSSAPI
+sasl.kerberos.service.name=kafka
+security.protocol=SASL_PLAINTEXT
+sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
+   useKeyTab=true \
+   storeKeyTab=true \
+   serviceName="kafka" \
+   keyTab="/home/troy_raen_pitt/consume-ztf/pitt-reader.user.keytab" \
+   principal="pitt-reader@KAFKA.SECURE" \
+   useTicketCache=false;
+
+# connecting to ZTF
+bootstrap.servers=public2.alerts.ztf.uw.edu:9094
+# group.id=group
+# session.timeout.ms=6000
+# enable.auto.commit=False
+# sasl.kerberos.kinit.cmd='kinit -t "%{sasl.kerberos.keytab}" -k %{sasl.kerberos.principal}'
+# auto.offset.reset=earliest
+consumer.sasl.mechanism=GSSAPI
+consumer.sasl.kerberos.service.name=kafka
+consumer.security.protocol=SASL_PLAINTEXT
+consumer.sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
+   useKeyTab=true \
+   storeKeyTab=true \
+   serviceName="kafka" \
+   keyTab="/home/troy_raen_pitt/consume-ztf/pitt-reader.user.keytab" \
+   principal="pitt-reader@KAFKA.SECURE" \
+   useTicketCache=false;
+```
+
+__Connector configuration__
+- [CloudPubSubConnector Sink Configuration Properties](https://github.com/GoogleCloudPlatform/pubsub/tree/master/kafka-connector#sink-connector)
+- See example config file
+    - [`cps-sink-connector.properties`](https://github.com/GoogleCloudPlatform/pubsub/blob/master/kafka-connector/config/cps-sink-connector.properties)
+
+Create a file called `ps-connector.properties` containing the following:
+```bash
+name=ps-sink-connector-ztf
+connector.class=com.google.pubsub.kafka.sink.CloudPubSubSinkConnector
+tasks.max=10
+# set kafka the topic
+topics=ztf_20201224_programid1
+# set the PS configs
+cps.topic=troy_test_topic
+cps.project=ardent-cycling-243415
+# include Kafka topic, partition, offset, timestamp as msg attributes
+metadata.publish=true
+```
+<!-- fe Install and Configure -->
+
+<a name="psconnect-run"></a>
+### Run the Pub/Sub Connector
+<!-- fs -->
+`ssh` into the machine:
+```bash
+gcloud beta compute ssh kafka-consumer --zone us-central1-a
+```
+
+Start the connector
+```bash
+cd /bin
+screen
+# if needed, change the topic or other configs in the .properties files (called below)
+./connect-standalone /home/troy_raen_pitt/consume-ztf/psconnect-worker.properties /home/troy_raen_pitt/consume-ztf/ps-connector.properties
+```
+
+This will start up a Kafka consumer and route the messages to Pub/Sub.
+After a few minutes, if it is working correctly, you will see log messages similar to
+```
+INFO WorkerSinkTask{id=ps-sink-connector-ztf-0} Committing offsets asynchronously using sequence number 3
+```
+<!-- fe Run the Pub/Sub Connector -->
+<!-- fe Pub/Sub Connector -->
