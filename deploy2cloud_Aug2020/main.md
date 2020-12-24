@@ -3,6 +3,7 @@
 - [Monitoring dashboard (project)](https://console.cloud.google.com/monitoring?project=ardent-cycling-243415)
 - [Monitor `consume-ztf` VM group](https://console.cloud.google.com/monitoring/groups/1832876284279888595?project=ardent-cycling-243415)
 - [Log: troy-manual-ops](https://console.cloud.google.com/logs/query;query=logName%3D%22projects%2Fardent-cycling-243415%2Flogs%2Ftroy-manual-ops%22?project=ardent-cycling-243415&query=%0A)
+- [Error Reporting](https://console.cloud.google.com/errors?time=P30D&order=LAST_SEEN_DESC&resolution=OPEN&resolution=ACKNOWLEDGED&project=ardent-cycling-243415)
 ---
 - [confluent_kafka API](https://docs.confluent.io/current/clients/confluent-kafka-python/#pythonclient-consumer)
 - [Kafka Python Client](https://docs.confluent.io/current/clients/python.html#)
@@ -21,9 +22,10 @@ gcloud compute instances create-with-container consume-ztf-${monthday} --zone=us
 
 Check [Dashboard `consume-ztf`](https://console.cloud.google.com/monitoring/dashboards/builder/3a371dcb-42d1-4ea0-add8-141d025924f6?project=ardent-cycling-243415&dashboardBuilderState=%257B%2522editModeEnabled%2522:false%257D&timeDomain=1h)
 - Today's broker is receiving alerts
-- Old brokers logging 'msg is None'
+- Old brokers logging 'msg is None' - stop them
 
 __Old brokers done consuming: stop VM and load alerts -> BQ__
+(not necessary if Beam pipeline is running. just stop/delete the VM)
 ```bash
 gcloud auth login
 pgbenv

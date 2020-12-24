@@ -1,12 +1,13 @@
 # ZTF Beam Consumer
 Rewriting the consumer into a Dataflow / Apache Beam job.
 
-- [Monitor `production-ztf-alert-data-ps-extract-strip-bq`](https://console.cloud.google.com/dataflow/jobs/us-central1/2020-12-07_12_14_06-12880147207196234384;step=;mainTab=JOB_METRICS?project=ardent-cycling-243415)
+- Monitor the Dataflow job [`production-ztf-alert-data-ps-extract-strip-bq`](https://console.cloud.google.com/dataflow/jobs/us-central1/2020-12-07_12_14_06-12880147207196234384;step=;mainTab=JOB_METRICS?project=ardent-cycling-243415)
 
 # ToC
 - [Beam environment Prereqs](#beam-prereqs)
 - [Create GCP resources](#gcpsetup)
 - [Create and Run Beam](#runbeam)
+- [Move code to `Pitt-Google-Broker` repo](#move2pgbrepo)
 
 
 # To Do
@@ -52,6 +53,7 @@ EXPORT ztf_keytab_path='pitt-reader.user.keytab'
 
 __Setup PubSub notifications on GCS bucket__
 - [Using Pub/Sub notifications for Cloud Storage](https://cloud.google.com/storage/docs/reporting-changes#gsutil)
+
 ```bash
 BUCKET_NAME='ardent-cycling-243415_ztf_alert_avro_bucket'
 TOPIC_NAME='projects/ardent-cycling-243415/topics/ztf_alert_avro_bucket'
@@ -71,6 +73,7 @@ gsutil notification delete projects/_/buckets/${BUCKET_NAME}/notificationConfigs
 ```
 
 __Create other resources__
+
 ```python
 from google.cloud import pubsub_v1, bigquery, storage
 PROJECT_ID = 'ardent-cycling-243415'
@@ -130,6 +133,19 @@ python -m ztf-beam \
 
 
 <!-- fe Create and Run Beam -->
+
+
+<a name="move2pgbrepo"></a>
+# Move code to `Pitt-Google-Broker` repo
+<!-- fs -->
+
+- [ ]  move the existing code
+- [ ]  clean up the code
+    - [ ]  move main script args outside the script, use `argparse`
+    - [ ]  handle some of the Salt2 errors with `try/except`
+- [ ]  update the docs
+
+<!-- fe Move code to `Pitt-Google-Broker` repo -->
 
 
 # Sand
