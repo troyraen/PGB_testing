@@ -208,12 +208,12 @@ Following:
 
 1. Create a directory to store the connectors:
 ```bash
-mkdir /usr/local/share/kafka/connectors
+mkdir /usr/local/share/kafka/plugins
 ```
 
 2. To use connectors stored here, the `.properties` file called when running the consumer/connector must include the following:
 ```bash
-plugin.path=/usr/local/share/kafka/connectors
+plugin.path=/usr/local/share/kafka/plugins
 ```
 
 3. Create a working directory. In the following I use `/home/troy_raen_pitt/consume-ztf`
@@ -240,7 +240,7 @@ I pieced the following together from:
 
 ```bash
 # navigate to the directory created above to store connectors
-cd /usr/local/share/kafka/connectors
+cd /usr/local/share/kafka/plugins
 # download the .jar file
 CONNECTOR_RELEASE=v0.5-alpha
 sudo wget https://github.com/GoogleCloudPlatform/pubsub/releases/download/${CONNECTOR_RELEASE}/pubsub-kafka-connector.jar
@@ -277,12 +277,10 @@ cd /home/troy_raen_pitt/consume-ztf
 
 Create a file called `psconnect-worker.properties` containing the following:
 ```bash
-plugin.path=/usr/local/share/kafka/connectors
+plugin.path=/usr/local/share/kafka/plugins
 # ByteArrayConverter provides a “pass-through” option that does no conversion
 key.converter=org.apache.kafka.connect.converters.ByteArrayConverter
 value.converter=org.apache.kafka.connect.converters.ByteArrayConverter
-# key.converter.schemas.enable=false
-# value.converter.schemas.enable=false
 offset.storage.file.filename=/tmp/connect.offsets
 # Flush much faster than normal, which is useful for testing/debugging
 # offset.flush.interval.ms=10000
@@ -305,7 +303,7 @@ bootstrap.servers=public2.alerts.ztf.uw.edu:9094
 # session.timeout.ms=6000
 # enable.auto.commit=False
 # sasl.kerberos.kinit.cmd='kinit -t "%{sasl.kerberos.keytab}" -k %{sasl.kerberos.principal}'
-# auto.offset.reset=earliest
+consumer.auto.offset.reset=earliest
 consumer.sasl.mechanism=GSSAPI
 consumer.sasl.kerberos.service.name=kafka
 consumer.security.protocol=SASL_PLAINTEXT
@@ -329,9 +327,9 @@ name=ps-sink-connector-ztf
 connector.class=com.google.pubsub.kafka.sink.CloudPubSubSinkConnector
 tasks.max=10
 # set kafka the topic
-topics=ztf_20201224_programid1
+topics=ztf_20201227_programid1
 # set the PS configs
-cps.topic=troy_test_topic
+cps.topic=ztf_alert_data
 cps.project=ardent-cycling-243415
 # include Kafka topic, partition, offset, timestamp as msg attributes
 metadata.publish=true
