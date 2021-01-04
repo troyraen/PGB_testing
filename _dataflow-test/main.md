@@ -1,5 +1,6 @@
 - Apache Beam
     - [Apache Beam Overview/Tutorial](https://beam.apache.org/documentation/programming-guide/)
+    - [Apache Beam SDK (2.25.0) for Python](https://beam.apache.org/releases/pydoc/2.25.0/) 
     - [Managing Python Pipeline Dependencies](https://beam.apache.org/documentation/sdks/python-pipeline-dependencies/#multiple-file-dependencies)
     - [ParDo explanation/example](https://beam.apache.org/documentation/programming-guide/#core-beam-transforms)
     - [Deadletter handling, Python example](https://stackoverflow.com/questions/59102519/monitoring-writetobigquery)

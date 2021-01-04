@@ -57,18 +57,19 @@ __Setup PubSub notifications on GCS bucket__
 ```bash
 BUCKET_NAME='ardent-cycling-243415_ztf_alert_avro_bucket'
 TOPIC_NAME='projects/ardent-cycling-243415/topics/ztf_alert_avro_bucket'
+format=json  # json or none; whether to deliver the payload with the PS msg
 # create the notifications -> PS
 gsutil notification create \
             -t ${TOPIC_NAME} \
             -e OBJECT_FINALIZE \
-            -f none \
+            -f ${format} \
             gs://${BUCKET_NAME}
 
 # check the notifications on the bucket
 gsutil notification list gs://${BUCKET_NAME}
 
 # remove the notification
-CONFIGURATION_NAME=7  # get from list command above
+CONFIGURATION_NAME=11  # get from list command above
 gsutil notification delete projects/_/buckets/${BUCKET_NAME}/notificationConfigs/${CONFIGURATION_NAME}
 ```
 
@@ -139,10 +140,12 @@ python -m ztf-beam \
 # Move code to `Pitt-Google-Broker` repo
 <!-- fs -->
 
-- [ ]  move the existing code
+- [x]  move the existing code
 - [ ]  clean up the code
-    - [ ]  move main script args outside the script, use `argparse`
+    - [x]  move main script args to cmd line args, use `argparse`
+    - [ ]  move function args to cmd line args
     - [ ]  handle some of the Salt2 errors with `try/except`
+- [x]  add a beam+dataflow primer
 - [ ]  update the docs
 
 <!-- fe Move code to `Pitt-Google-Broker` repo -->

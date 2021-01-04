@@ -432,6 +432,11 @@ Confirmed I was able to get alerts from today's topic (ztf_20201110_programid1).
 <a name="offsets"></a>
 ## Restting Kafka consumer offsets
 <!-- fs -->
+
+```bash
+kafka-consumer-groups --bootstrap-server <kafkahost:port> --group <group_id> --topic <topic_name> --reset-offsets --to-earliest --execute
+```
+
 - [confluent-kafka Consumer Read the Docs](https://docs.confluent.io/current/clients/confluent-kafka-python/#consumer)
 - [Consumer config dict options](https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md)
 

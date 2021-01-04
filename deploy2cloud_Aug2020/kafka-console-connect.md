@@ -18,6 +18,7 @@
     - [Pub/Sub Connector](#psconnect)
         - [Install and Configure](#psconnect-config)
         - [__Run the Pub/Sub Connector__](#psconnect-run)
+    - [BigQuery Connector](#bqconnect)
 ---
 
 <a name="install"></a>
@@ -181,7 +182,7 @@ gcloud beta compute ssh kafka-consumer --zone us-central1-a
 export KAFKA_OPTS="-Djava.security.auth.login.config=/home/troy_raen_pitt/consume-ztf/kafka_client_jaas.conf"
 
 # Set the topic and run the console consumer
-topicday=20201223
+topicday=20201228
 cd /bin
 ./kafka-console-consumer \
     --bootstrap-server public2.alerts.ztf.uw.edu:9094 \
@@ -344,7 +345,7 @@ metadata.publish=true
 gcloud beta compute ssh kafka-consumer --zone us-central1-a
 ```
 
-Start the connector
+__Start the connector__
 ```bash
 cd /bin
 screen
@@ -359,5 +360,50 @@ After a few minutes, if it is working correctly, you will see log messages simil
 ```
 INFO WorkerSinkTask{id=ps-sink-connector-ztf-0} Committing offsets asynchronously using sequence number 3
 ```
+
+__Check periodically for the topic to open up__
+```bash
+# Set the environment variable
+export KAFKA_OPTS="-Djava.security.auth.login.config=/home/troy_raen_pitt/consume-ztf/kafka_client_jaas.conf"
+kafka-topics --list --bootstrap-server public2.alerts.ztf.uw.edu:9094
+topicday=20201228
+kafka-topics --describe --topic ztf_${topicday}_programid1 --bootstrap-server public2.alerts.ztf.uw.edu:9094
+
+cd /bin
+screen
+# if needed, change the topic or other configs in the .properties files called below
+
+n=0
+until [ "$n" -ge 2 ]
+do
+    ./connect-standalone \
+        /home/troy_raen_pitt/consume-ztf/psconnect-worker.properties \
+        /home/troy_raen_pitt/consume-ztf/ps-connector.properties \
+        && break
+   n=$((n+1))
+   echo ${n}
+   sleep 30
+done
+```
+
 <!-- fe Run the Pub/Sub Connector -->
 <!-- fe Pub/Sub Connector -->
+
+<a name="bqconnect"></a>
+## BigQuery Connector
+<!-- fs -->
+- [Google BigQuery Sink Connector for Confluent Platform](https://docs.confluent.io/kafka-connect-bigquery/current/index.html)
+- [BigQuery Quotas and Limits: Streaming Inserts](https://cloud.google.com/bigquery/quotas#streaming_inserts)
+<!-- fe BigQuery Connector -->
+
+<a name="offsets"></a>
+# Restting Kafka consumer offsets
+<!-- fs -->
+
+```bash
+cd /bin
+server=public2.alerts.ztf.uw.edu:9094
+topic=ztf_20210102_programid1
+kafka-consumer-groups --bootstrap-server ${server} --group group --topic ${topic} --reset-offsets --to-earliest --execute
+# does not work
+```

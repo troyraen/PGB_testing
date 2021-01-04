@@ -97,3 +97,31 @@ from broker.alert_ingestion.gen_valid_schema import _load_Avro
 schema, data = _load_Avro(gcs_fname)
 # this works
 ```
+
+__Setup PubSub notifications on GCS bucket__
+- [Using Pub/Sub notifications for Cloud Storage](https://cloud.google.com/storage/docs/reporting-changes#gsutil)
+
+```bash
+BUCKET_NAME='ardent-cycling-243415_ztf_alert_avro_bucket'
+TOPIC_NAME='projects/ardent-cycling-243415/topics/ztf_alert_avro_bucket'
+format=json  # json or none; whether to deliver the payload with the PS msg
+# create the notifications -> PS
+gsutil notification create \
+            -t ${TOPIC_NAME} \
+            -e OBJECT_FINALIZE \
+            -f ${format} \
+            gs://${BUCKET_NAME}
+
+# check the notifications on the bucket
+gsutil notification list gs://${BUCKET_NAME}
+
+# remove the notification
+CONFIGURATION_NAME=11  # get from list command above
+gsutil notification delete projects/_/buckets/${BUCKET_NAME}/notificationConfigs/${CONFIGURATION_NAME}
+```
+
+__count the number of objects in the bucket matching day's topic__
+```bash
+gsutil ls gs://ardent-cycling-243415_ztf_alert_avro_bucket/ztf_20201227_programid1_*.avro > dec27.count
+wc -l dec27.count
+```
