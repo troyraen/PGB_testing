@@ -18,26 +18,25 @@ gcloud compute instances create ${instancename} \
     --scopes=cloud-platform \
     --metadata=google-logging-enabled=true,startup-script-url=${installscript} \
     --tags=kafka-server # for the firewall rule
+# give the vm time to start the install before switching the script
+sleep 2m
 # set the startup script
 gcloud compute instances add-metadata ${instancename} --zone ${zone} \
     --metadata startup-script-url=${startupscript}
-# shutdown the VM (the nightly startup script will start it up again)
-gcloud beta compute instances stop ${instancename} --zone ${zone}
-
 
 #--- Create and configure the Night Conductor VM
 instancename=night-conductor
 installscript="gs://${bucket}/night_conductor/vm_install.sh"
-startupscript=#"gs://${bucket}/consumer/vm_startup.sh"
-machinetype=f1-micro
+startupscript="gs://${bucket}/night_conductor/vm_startup.sh"
+machinetype=e2-standard-2
 gcloud compute instances create ${instancename} \
     --zone=${zone} \
     --machine-type=${machinetype} \
     --service-account=${CEserviceaccount} \
     --scopes=cloud-platform \
     --metadata=google-logging-enabled=true,startup-script-url=${installscript}
+# give the vm time to start the install before switching the script
+sleep 2m
 # set the startup script
 gcloud compute instances add-metadata ${instancename} --zone ${zone} \
     --metadata startup-script-url=${startupscript}
-# shutdown the VM
-gcloud beta compute instances stop ${instancename} --zone ${zone}

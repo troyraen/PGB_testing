@@ -1,8 +1,8 @@
 #! /bin/bash
 # Configure and Start the Kafka -> Pub/Sub connector
 
-workingdir=/home/ztf_consumer
-mkdir -p ${workingdir}
+workingdir=/home/broker/consumer
+# mkdir -p ${workingdir} # keytab auth file must already exist in this dir
 cd ${workingdir}
 
 #--- Get project and instance metadata
@@ -29,7 +29,7 @@ sed -i "s/PS_TOPIC/${PS_TOPIC}/g" ${fconfig}
 sed -i "s/KAFKA_TOPIC/${KAFKA_TOPIC}/g" ${fconfig}
 
 #--- Start the Kafka -> Pub/Sub connector
-cd /bin
-./connect-standalone \
-    ${workingdir}/psconnect-worker.properties \
-    ${workingdir}/ps-connector.properties
+# cd /bin
+# ./connect-standalone \
+#     ${workingdir}/psconnect-worker.properties \
+#     ${workingdir}/ps-connector.properties
