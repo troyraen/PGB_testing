@@ -10,7 +10,7 @@ H="Metadata-Flavor: Google"
 PROJECT_ID=$(curl "${baseurl}/project/project-id" -H "${H}")
 bucket="${PROJECT_ID}-broker_files"
 
-# broker's start_night directory from GCS and cd in
+# copy broker's start_night directory from GCS and cd in
 gsutil cp -r gs://${bucket}/night_conductor/start_night .
 cd start_night
 

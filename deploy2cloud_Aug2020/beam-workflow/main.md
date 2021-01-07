@@ -139,7 +139,7 @@ python -m ztf-beam \
 <a name="move2pgbrepo"></a>
 # Move code to `Pitt-Google-Broker` repo
 <!-- fs -->
-
+__Tracking moved up a level to [`../main.md`](../main.md)__ 
 - [x]  move the existing code
 - [ ]  clean up the code
     - [x]  move main script args to cmd line args, use `argparse`

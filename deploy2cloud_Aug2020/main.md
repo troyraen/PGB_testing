@@ -39,6 +39,22 @@ year='2020'
 ./stopConsumer_loadBQ.sh ${day} ${month} ${monthname} ${year}
 ```
 
+# Move to main repo
+
+1. branch `u/tjr/beam-setup`
+2. branch `u/tjr/beam-split-bq-sink`
+
+[`beam-workflow`](beam-workflow/)
+- [x]  move the existing code
+- [ ]  clean up the code
+    - [x]  move main script args to cmd line args, use `argparse`
+    - [ ]  move function args to cmd line args
+    - [ ]  handle some of the Salt2 errors with `try/except`
+- [x]  add a beam+dataflow primer
+- [ ]  update the docs
+
+
+
 # ToC
 - [Pre-meeting To do list](#pretodo)
 - [To do list](#todo)

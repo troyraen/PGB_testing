@@ -9,6 +9,7 @@ The intention is for the following to be automated.
 1. stop yesterday's Kafka -> PS connector
 2. stop the kafka-consumer VM
 ```bash
+gcloud beta compute ssh kafka-consumer --zone us-central1-a
 gcloud beta compute instances stop kafka-consumer --zone us-central1-a
 ```
 
@@ -20,20 +21,13 @@ gcloud beta compute instances stop kafka-consumer --zone us-central1-a
     - `ztf_salt2-counter`
 
 ```bash
-d=$(date)
-prfx=projects/ardent-cycling-243415/subscriptions/
-SUBSCRIPTION=ztf_alert_data-counter
-SUBSCRIPTION=ztf_alert_avro_bucket-counter
-SUBSCRIPTION=ztf_exgalac_trans-counter
-SUBSCRIPTION=ztf_salt2-counter
-gcloud pubsub subscriptions seek "${prfx}${SUBSCRIPTION}" --time="${d}"
-
+./start-night.sh
 ```
 
-2. Start the Dataflow job
+2. Start the Dataflow jobs
 ```bash
 cd broker/beam
-# use the readme to set the configs and start the job
+# use the readme to set the configs and start the jobs
 ```
 
 3. Start the Kafka -> Pub/Sub connector
@@ -42,9 +36,11 @@ cd broker/beam
 gcloud beta compute instances start kafka-consumer --zone us-central1-a
 gcloud beta compute ssh kafka-consumer --zone us-central1-a
 
+# update the date for the current topic
+sudo nano /home/troy_raen_pitt/consume-ztf/ps-connector.properties
+
 cd /bin
 screen
-# if needed, change the topic or other configs in the .properties files called below
 ./connect-standalone \
     /home/troy_raen_pitt/consume-ztf/psconnect-worker.properties \
     /home/troy_raen_pitt/consume-ztf/ps-connector.properties

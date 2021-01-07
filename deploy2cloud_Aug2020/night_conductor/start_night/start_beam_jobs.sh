@@ -40,11 +40,16 @@ timeout 30 \
         --sink_PS_exgalTrans ${sink_PS_exgalTrans} \
         --sink_PS_salt2 ${sink_PS_salt2} \
         --streaming
-# if we can get the previous command to return the job info
-# instead of holding the terminal
+# If we can get the previous command to return the job info
+# like it's "supposed" to
+# instead of holding the terminal,
 # we should be able to parse out the job ID and then
 # get the job status this way:
 # gcloud dataflow jobs list --project=<PROJECT_ID> --filter="id=<JOB_ID>" --format="get(state)"
+# Then check every N(=30?) seconds until the job is "RUNNING" or "FAILED".
+#
+# We should also store the job ID in a file in the GCS ${bucket}
+# so the conductor can use it later to stop the job.
 
 # Start the ztf -> BQ job
 cd ${beamdir} && cd ztf_bq_sink
@@ -62,4 +67,4 @@ timeout 30 \
         --PROJECTID ${PROJECT_ID} \
         --source_PS_ztf ${source_PS_ztf} \
         --sink_BQ_originalAlert ${sink_BQ_originalAlert} \
-        --streaming)
+        --streaming
