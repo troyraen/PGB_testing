@@ -7,9 +7,9 @@ There are 4 main components:
 - The __data storage__ (x2) and __processing__ (x1) components ingest the consumer's Pub/Sub stream and proceed with their function. These components store their output data to Cloud Storage and/or BigQuery, and publish it to a dedicated Pub/Sub topic/stream.
 
 In addition, there is a "__night conductor__" (running on a VM) that
-orchestrates the broker, starting and stoping resources/jobs
-on a daily schedule.
-Some of it's functions still need to be triggered manually.
+orchestrates the broker,
+starting up resources and jobs at night (and will shut them down in the morning, but that script isn't written yet).
+
 
 Details:
 
@@ -20,7 +20,7 @@ Details:
 
 2. __Avro File Storage__ (ZTF Alert -> Fix Schema -> GCS bucket)
     - __Cloud Function:__
- [`upload_ztf_bytes_to_bucket`](https://console.cloud.google.com/functions/details/us-central1/upload_ztf_bytes_to_bucket?project=ardent-cycling-243415&pageState=(%22functionsDetailsCharts%22:(%22groupValue%22:%22P1D%22,%22customValue%22:null)))
+ [`upload_ztf_bytes_to_bucket`](https://console.cloud.google.com/functions/details/us-central1/upload_ztf_bytes_to_bucket?project=ardent-cycling-243415&pageState=%28%22functionsDetailsCharts%22:%28%22groupValue%22:%22P1D%22,%22customValue%22:null%29%29)
     - __Listens to__ PS topic: [`ztf_alert_data`](https://console.cloud.google.com/cloudpubsub/topic/detail/ztf_alert_data?project=ardent-cycling-243415)
     - __Stores in__ GCS bucket: [`ztf_alert_avro_bucket`](https://console.cloud.google.com/storage/browser/ardent-cycling-243415_ztf_alert_avro_bucket;tab=objects?forceOnBucketsSortingFiltering=false&project=ardent-cycling-243415&prefix=&forceOnObjectsSortingFiltering=false)
     - __GCS bucket triggers__ Pub/Sub topic: [`ztf_alert_avro_bucket`](https://console.cloud.google.com/cloudpubsub/topic/detail/ztf_alert_avro_bucket?project=ardent-cycling-243415)
@@ -36,16 +36,17 @@ Details:
     - __Stores in__ BQ table: [`ztf_alerts.salt2`](https://console.cloud.google.com/bigquery?project=ardent-cycling-243415) (Salt2 fit params)
     - __Stores in__ GCS bucket: [`ztf-sncosmo/salt2/plot_lc`](https://console.cloud.google.com/storage/browser/ardent-cycling-243415_ztf-sncosmo/salt2/plot_lc?pageState=%28%22StorageObjectListTable%22:%28%22f%22:%22%255B%255D%22%29%29&project=ardent-cycling-243415&prefix=&forceOnObjectsSortingFiltering=false) (lightcurve + Salt2 fit, png)
     - __Publishes to__ PS topics:
-        - [ `ztf_exgalac_trans`](https://console.cloud.google.com/cloudpubsub/topic/detail/ztf_exgalac_trans?project=ardent-cycling-243415) (alerts passing `extragalactic transient` filter)
+        - [ `ztf_exgalac_trans`](https://console.cloud.google.com/cloudpubsub/topic/detail/ztf_exgalac_trans?project=ardent-cycling-243415) (alerts passing extragalactic transient filter)
         - [`ztf_salt2`](https://console.cloud.google.com/cloudpubsub/topic/detail/ztf_salt2?project=ardent-cycling-243415) (Salt2 fit params)
 
 5. __Night Conductor__ (orchestrates GCP resources and jobs to run the broker each night)
-    - __Compute Engine VM:__  [`night-conductor`](https://console.cloud.google.com/compute/instancesMonitoringDetail/zones/us-central1-a/instances/night-conductor?project=ardent-cycling-243415&tab=monitoring&duration=PT1H&pageState=(%22duration%22:(%22groupValue%22:%22P1D%22)))
+    - __Compute Engine VM:__  [`night-conductor`](https://console.cloud.google.com/compute/instancesDetail/zones/us-central1-a/instances/night-conductor?tab=details&project=ardent-cycling-243415)
 
 <!-- fe Broker Architecture -->
 
 # Setup the Broker for the First Time
 <!-- fs -->
+[Note:] Please don't actually try to setup the broker right now. A test-setup hasn't been configured yet, and the real resources already exist.
 
 1. Setup and configure a new Google Cloud Platform (GCP) project.
     - [Instructions in our current docs](https://pitt-broker.readthedocs.io/en/latest/installation_setup/installation.html). We would need to follow pieces of the "Installation" and "Defining Environmental Variables" sections. Our project is already setup, so leaving out most of the details for now.
@@ -57,10 +58,11 @@ Details:
 
 3. Clone the repo and run the broker's setup script.
 The script will:
-    1. Create GCP resources (BigQuery, GCS, Pub/Sub and Logging)
-    2. Upload some broker files to a Cloud Storage bucket. The VMs will fetch a new copy of these files before running the relevant process. This provides us with the flexibility to update individual broker processes/components by simply uploading a new version of the relevant file(s) to the bucket, avoiding the need to re-deploy the broker or VM to make an update.
-    3. [PrePR] Deploy the cloud function.
-    4. Create and configure the Compute Engine instances (`night-conductor` and `ztf-consumer`)
+    1. Create and configure GCP resources in BigQuery, Cloud Storage, and Pub/Sub)
+    2. Upload some broker files to the Cloud Storage bucket [ardent-cycling-243415-broker_files](https://console.cloud.google.com/storage/browser/ardent-cycling-243415-broker_files?project=ardent-cycling-243415&pageState=%28%22StorageObjectListTable%22:%28%22f%22:%22%255B%255D%22%29%29&prefix=&forceOnObjectsSortingFiltering=false). The VMs will fetch a new copy of these files before running the relevant process. This provides us with the flexibility to update individual broker processes/components by simply uploading a new version of the relevant file(s) to the bucket, avoiding the need to re-deploy the broker or VM to make an update.
+    3. Setup the Pub/Sub stream that announces a new file in the [`ztf_alert_avro_bucket`]((https://console.cloud.google.com/storage/browser/ardent-cycling-243415_ztf_alert_avro_bucket;tab=objects?forceOnBucketsSortingFiltering=false&project=ardent-cycling-243415&prefix=&forceOnObjectsSortingFiltering=false)).
+    4. Deploys the Cloud Function [`upload_ztf_bytes_to_bucket`](https://console.cloud.google.com/functions/details/us-central1/upload_ztf_bytes_to_bucket?project=ardent-cycling-243415&pageState=%28%22functionsDetailsCharts%22:%28%22groupValue%22:%22P1D%22,%22customValue%22:null%29%29) which stores alerts as Avro files in Cloud Storage.
+    5. Create and configure the Compute Engine instances ([`night-conductor`](https://console.cloud.google.com/compute/instancesDetail/zones/us-central1-a/instances/night-conductor?tab=details&project=ardent-cycling-243415) and [`ztf-consumer`](https://console.cloud.google.com/compute/instancesMonitoringDetail/zones/us-central1-a/instances/ztf-consumer?project=ardent-cycling-243415&tab=monitoring&duration=PT1H&pageState=%28%22duration%22:%28%22groupValue%22:%22P7D%22,%22customValue%22:null%29%29))
 
 ```bash
 # If you used a virtual environment to complete the previous setup steps,
@@ -72,18 +74,17 @@ export GOOGLE_CLOUD_PROJECT=ardent-cycling-243415
 # The Compute Engine VMs (instances) must be assigned to a specific zone.
 # We use the same zone for all instances:
 export CE_zone=us-central1-a
-# CEserviceaccount=591409139500-compute@developer.gserviceaccount.com
 
 # Clone the broker repo
 git clone https://github.com/mwvgroup/Pitt-Google-Broker
 
 # Run the broker's setup script
 cd Pitt-Google-Broker/setup_broker
-# cd deploy2cloud_Aug2020/setup_broker
-./setup_broker.sh
+# ./setup_broker.sh  
+# Please don't actually run the setup right now.
 ```
 
-4. The `ztf-consumer` VM (created in `setup_broker.sh`) requires two auth files to connect to the ZTF stream.
+4. The `ztf-consumer` VM (created in `setup_broker.sh`) requires two auth files (not included with the broker) to connect to the ZTF stream.
 _These must be uploaded manually and stored at the following locations:_
     1. `krb5.conf`, at VM path `/etc/krb5.conf`
     2. `pitt-reader.user.keytab`, at VM path `/home/broker/consumer/pitt-reader.user.keytab`
@@ -99,35 +100,50 @@ gcloud compute scp \
 
 # Run Daily Broker
 <!-- fs -->
-1. set consumer VM metadata
-2. reset the Pub/Sub counters
+[[__ZTF Stream Monitoring Dashboard__](https://console.cloud.google.com/monitoring/dashboards/builder/d8b7db8b-c875-4b93-8b31-d9f427f0c761?project=ardent-cycling-243415&dashboardBuilderState=%257B%2522editModeEnabled%2522:false%257D&timeDomain=1w)]
+
+The set of scripts in [night_conductor](night_conductor) orchestrates the tasks required to start up the broker (shutdown to be configured later).
+We run these scripts on a dedicated Compute Engine instance, [__`night-conductor`__](https://console.cloud.google.com/compute/instancesDetail/zones/us-central1-a/instances/night-conductor?tab=details&project=ardent-cycling-243415),
+which has been configured to fetch them (and other broker files) automatically upon startup from the Cloud Storage bucket (created when during broker setup) and execute them.
+Therefore, to begin ingesting and processing alerts for the night, all we need to do is set the Kafka/ZTF topic and start `night-conductor`.
+(Currently that's not _quite_ true, I am still starting the Kafka -> Pub/Sub connector manually, but only so that I can make sure everything started up correctly first. I'll automate this soon.)
 
 ```bash
-# start the night-conductor vm
-# then log in to the ztf-consumer vm
-# and manually start the connector
+instancename=night-conductor
+zone=us-central1-a
+brokerbucket=ardent-cycling-243415-broker_files
+startupscript="gs://${brokerbucket}/night_conductor/vm_startup.sh"
+gcloud compute instances add-metadata ${instancename} \
+    --zone ${zone} --metadata startup-script-url=${startupscript}
 
-cd deploy2cloud_Aug2020/night_conductor/start_night
-# ./start_night.sh ${KAFKA_TOPIC}
+gcloud compute instances start ${instancename} --zone ${zone}
 
-PROJECT_ID=${GOOGLE_CLOUD_PROJECT}
-KAFKA_TOPIC=ztf_20210107_programid1
-brokerdir=brokerdir
-bucket="${PROJECT_ID}-broker_files"
+# log in to the ztf-consumer vm,
+# update the topic, and
+# manually start the connector
 
-./reset_ps_counters.sh ${PROJECT_ID}
-./start_beam_jobs.sh ${PROJECT_ID} ${brokerdir} ${bucket}
-./start_consumer.sh ${KAFKA_TOPIC}
-
+# shutdown night-conductor, it does not need to run all night
+gcloud compute instances stop ${instancename} --zone ${zone}
+# (night-conductor auto-shutdown to be configured later)
 ```
 
-- [Storing and retrieving instance metadata](https://cloud.google.com/compute/docs/storing-retrieving-metadata)
-    - [Setting custom metadata](https://cloud.google.com/compute/docs/storing-retrieving-metadata#custom)
-- [Scheduling compute instances with Cloud Scheduler](https://cloud.google.com/scheduler/docs/start-and-stop-compute-engine-instances-on-a-schedule)
+Currently, `night-conductor` executes the following to start the night:
+1. Clears the messages from Pub/Sub subscriptions that we use to count the number of elements received and processed each night.
+2. Starts the two Dataflow jobs.
+3. Starts the [`ztf-consumer`](https://console.cloud.google.com/compute/instancesMonitoringDetail/zones/us-central1-a/instances/ztf-consumer?project=ardent-cycling-243415&tab=monitoring&duration=PT1H&pageState=%28%22duration%22:%28%22groupValue%22:%22P7D%22,%22customValue%22:null%29%29) VM (which is configured to connect to ZTF and begin ingesting upon startup).
 
-- [ ]  set an instance metadata key with the topic to subscribe to
-- [ ]  create/run startup script that
-    - [ ]  copies the topic into the `ps-connector.properties` file
-    - [ ]  starts the consumer
+Ultimately, `night-conductor` will also stop the ingestion and processing when the night is done, but it is not set up yet.
+Shutting it down manually is easy;
+shutting it down programmatically is tricky.
+The biggest (but not the only) problem is:
+how do we know that ZTF is done issuing alerts, we have received them all, and we have completed processing them all?
+
+Staging the startup scripts and other files in a Cloud Storage bucket means that we can update broker components simply by uploading a new file to the bucket.
+All VMs pull down a fresh copy of any file(s) before executing the relevant process.
+(Cloud Functions are different and must be re-deployed to be updated.)
+
+The Kafka -> Pub/Sub connector's connection to ZTF will fail (but won't exit the command) if there is not as least 1 alert in the topic (ZTF publishes to a new topic nightly), so I am still manually starting `night-conductor`.
+There _should_ be a programatic way to check whether a topic is available, but I haven't been able to find it yet.
+I have a new lead, so I'll work on it more.
 
 <!-- fe Run Daily Broker -->
