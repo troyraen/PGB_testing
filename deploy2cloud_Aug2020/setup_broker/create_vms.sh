@@ -17,7 +17,7 @@ gcloud compute instances create ${instancename} \
     --machine-type=${machinetype} \
     --scopes=cloud-platform \
     --metadata=google-logging-enabled=true,startup-script-url=${installscript} \
-    --tags=kafka-server # for the firewall rule
+    --tags=ztfport # for the firewall rule to open the port
 # give the vm time to start the install before switching the script
 sleep 2m
 # set the startup script
